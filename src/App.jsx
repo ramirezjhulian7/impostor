@@ -1,385 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Eye, EyeOff, Skull, Crown, AlertTriangle, Settings, Check, Shield, Shuffle, Play, ArrowRight, UserX, RefreshCw, Key, Database, Trash2, Clock, Pause, BarChart2, MessageCircle } from 'lucide-react';
-
-// --- UTILIDADES TÉCNICAS ---
-
-const generateId = () => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-};
-
-const shuffleArray = (array) => {
-    const newArray = [...array];
-    for (let i = newArray.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-    }
-    return newArray;
-};
-
-const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-};
-
-// --- BASE DE DATOS (COLOMBIA) ---
-const WORD_DATA = {
-    "Personajes (Colombia)": [
-        { word: 'Shakira', hint: 'Global' },
-        { word: 'Gabriel García Márquez', hint: 'Realismo' },
-        { word: 'El Pibe Valderrama', hint: 'Liderazgo' },
-        { word: 'Betty la Fea', hint: 'Transformación' },
-        { word: 'Diomedes Díaz', hint: 'Sentimiento' },
-        { word: 'Karol G', hint: 'Tendencia' },
-        { word: 'Sofía Vergara', hint: 'Carisma' },
-        { word: 'James Rodríguez', hint: 'Talento' },
-        { word: 'Pablo Escobar', hint: 'Poder' },
-        { word: 'Juanes', hint: 'Paz' },
-        { word: 'Rigoberto Urán', hint: 'Esfuerzo' },
-        { word: 'Pedro el Escamoso', hint: 'Estilo' },
-        { word: 'Joe Arroyo', hint: 'Noche' },
-        { word: 'Nairo Quintana', hint: 'Altura' },
-        { word: 'Fernando Botero', hint: 'Volumen' },
-        { word: 'Faustino Asprilla', hint: 'Velocidad' },
-        { word: 'Totó la Momposina', hint: 'Folclor' },
-        { word: 'Andrés Cepeda', hint: 'Romance' }
-    ],
-    "Comida Típica": [
-        { word: 'Bandeja Paisa', hint: 'Abundancia' },
-        { word: 'Arepa', hint: 'Base' },
-        { word: 'Ajiaco', hint: 'Mezcla' },
-        { word: 'Empanada', hint: 'Calle' },
-        { word: 'Sancocho', hint: 'Reunión' },
-        { word: 'Changua', hint: 'Polémica' },
-        { word: 'Tamal', hint: 'Sorpresa' },
-        { word: 'Buñuelo', hint: 'Diciembre' },
-        { word: 'Bocadillo Veleño', hint: 'Energía' },
-        { word: 'Café (Tinto)', hint: 'Rutina' },
-        { word: 'Lechona', hint: 'Celebración' },
-        { word: 'Hormigas Culonas', hint: 'Textura' },
-        { word: 'Oblea', hint: 'Fragilidad' },
-        { word: 'Cholado', hint: 'Fusión' },
-        { word: 'Mondongo', hint: 'Domingo' }
-    ],
-    "Lugares y Cultura": [
-        { word: 'Cartagena', hint: 'Historia' },
-        { word: 'Monserrate', hint: 'Panorama' },
-        { word: 'San Andrés', hint: 'Azul' },
-        { word: 'Transmilenio', hint: 'Caos' },
-        { word: 'Centro Comercial', hint: 'Encuentro' },
-        { word: 'Finca', hint: 'Descanso' },
-        { word: 'Estadio', hint: 'Pasión' },
-        { word: 'Feria de las Flores', hint: 'Color' },
-        { word: 'Carnaval de Barranquilla', hint: 'Alegría' },
-        { word: 'Río Magdalena', hint: 'Corriente' },
-        { word: 'Parque Tayrona', hint: 'Naturaleza' },
-        { word: 'Desierto de la Tatacoa', hint: 'Silencio' },
-        { word: 'Plaza de Bolívar', hint: 'Poder' },
-        { word: 'Ciclovía', hint: 'Libertad' }
-    ],
-    "Cosas de la Casa": [
-        { word: 'Olla a presión', hint: 'Peligro' },
-        { word: 'Chancla', hint: 'Corrección' },
-        { word: 'Control Remoto', hint: 'Pilas' },
-        { word: 'Nevera', hint: 'Necesidad' },
-        { word: 'Escoba', hint: 'Limpieza' },
-        { word: 'Celular', hint: 'Conexión' },
-        { word: 'Cédula', hint: 'Identidad' },
-        { word: 'Moto', hint: 'Agilidad' },
-        { word: 'Hamaca', hint: 'Sueño' },
-        { word: 'Molinillo', hint: 'Espuma' }
-    ]
-};
+import React from 'react';
+import { Users, UserPlus, Eye, EyeOff, Skull, Crown, AlertTriangle, Settings, Check, Shield, Shuffle, Play, ArrowRight, UserX, RefreshCw, Key, Database, Trash2, MessageCircle } from 'lucide-react';
+import { useImpostorGame } from './hooks/useImpostorGame';
+import TimerDisplay from './components/TimerDisplay';
+import StatsBoard from './components/StatsBoard';
+import { WORD_DATA } from './data/words';
 
 export default function ImpostorGame() {
-    const [phase, setPhase] = useState('setup');
-
-    // --- ESTADO INICIAL ---
-    const [players, setPlayers] = useState([
-        { id: generateId(), name: 'Jugador 1', role: 'civil', alive: true },
-        { id: generateId(), name: 'Jugador 2', role: 'civil', alive: true },
-        { id: generateId(), name: 'Jugador 3', role: 'civil', alive: true },
-        { id: generateId(), name: 'Jugador 4', role: 'civil', alive: true }
-    ]);
-
-    const [sessionStats, setSessionStats] = useState({});
-    const [impostorCount, setImpostorCount] = useState(1);
-    const [showCategoryToImpostor, setShowCategoryToImpostor] = useState(false);
-    const [showHintToImpostor, setShowHintToImpostor] = useState(true);
-    const [selectedCategory, setSelectedCategory] = useState('Aleatorio');
-
-    const [playedWords, setPlayedWords] = useState([]);
-    const [noWordsError, setNoWordsError] = useState(false);
-
-    // Estados de juego
-    const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
-    const [isRevealed, setIsRevealed] = useState(false);
-    const [secretWord, setSecretWord] = useState(null);
-    const [activeCategory, setActiveCategory] = useState('');
-    const [impostorHint, setImpostorHint] = useState('');
-
-    const [lastEliminated, setLastEliminated] = useState(null);
-    const [winnerTeam, setWinnerTeam] = useState(null);
-    const [lastImpostorIds, setLastImpostorIds] = useState([]);
-
-    // Estados de turno y tiempo
-    const [startingPlayerName, setStartingPlayerName] = useState(null);
-    const [timeLeft, setTimeLeft] = useState(0);
-    const [isTimerRunning, setIsTimerRunning] = useState(false);
-
-    useEffect(() => {
-        let interval = null;
-        if (isTimerRunning && timeLeft > 0) {
-            interval = setInterval(() => {
-                setTimeLeft((prevTime) => prevTime - 1);
-            }, 1000);
-        } else if (timeLeft === 0) {
-            setIsTimerRunning(false);
-        }
-        return () => clearInterval(interval);
-    }, [isTimerRunning, timeLeft]);
-
-    // --- LÓGICA DE JUEGO ---
-
-    const addPlayer = () => {
-        const newId = generateId();
-        setPlayers([...players, { id: newId, name: `Jugador ${players.length + 1}`, role: 'civil', alive: true }]);
-        setSessionStats(prev => ({
-            ...prev,
-            [newId]: prev[newId] || { wins: 0, losses: 0, games: 0, impostorGames: 0 }
-        }));
-    };
-
-    const removePlayer = (id) => {
-        if (players.length > 3) {
-            setPlayers(players.filter(p => p.id !== id));
-        }
-    };
-
-    const updateName = (id, newName) => {
-        setPlayers(players.map(p => p.id === id ? { ...p, name: newName } : p));
-    };
-
-    const clearHistory = () => {
-        setPlayedWords([]);
-        setNoWordsError(false);
-        setSessionStats({});
-        alert("Historial y estadísticas reiniciadas.");
-    };
-
-    const selectRoles = (currentPlayers, count) => {
-        let availableIndices = currentPlayers.map((_, i) => i);
-        const priorityIndices = availableIndices.filter(idx =>
-            !lastImpostorIds.includes(currentPlayers[idx].id)
-        );
-        let candidates = priorityIndices.length >= count ? priorityIndices : availableIndices;
-        const shuffledCandidates = shuffleArray(candidates);
-        return shuffledCandidates.slice(0, count);
-    };
-
-    const startTimerForRound = () => {
-        const activeCount = players.filter(p => p.alive).length;
-        setTimeLeft(activeCount * 30);
-        setIsTimerRunning(true);
-    };
-
-    const pickStartingPlayer = (currentPlayers) => {
-        const alivePlayers = currentPlayers.filter(p => p.alive);
-        if (alivePlayers.length > 0) {
-            const randomStarter = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
-            setStartingPlayerName(randomStarter.name);
-        }
-    };
-
-    const startGame = () => {
-        setNoWordsError(false);
-
-        let candidates = [];
-        if (selectedCategory === 'Aleatorio') {
-            Object.keys(WORD_DATA).forEach(cat => {
-                WORD_DATA[cat].forEach(item => {
-                    const uniqueId = `${cat}:${item.word}`;
-                    if (!playedWords.includes(uniqueId)) {
-                        candidates.push({ ...item, category: cat, uniqueId });
-                    }
-                });
-            });
-        } else {
-            if (WORD_DATA[selectedCategory]) {
-                WORD_DATA[selectedCategory].forEach(item => {
-                    const uniqueId = `${selectedCategory}:${item.word}`;
-                    if (!playedWords.includes(uniqueId)) {
-                        candidates.push({ ...item, category: selectedCategory, uniqueId });
-                    }
-                });
-            }
-        }
-
-        if (candidates.length === 0) {
-            setNoWordsError(true);
-            return;
-        }
-
-        const selection = candidates[Math.floor(Math.random() * candidates.length)];
-
-        setActiveCategory(selection.category);
-        setSecretWord(selection.word);
-        setImpostorHint(selection.hint);
-        setPlayedWords([...playedWords, selection.uniqueId]);
-
-        const impostorIndices = selectRoles(players, impostorCount);
-        const newPlayers = players.map((p, index) => ({
-            ...p,
-            role: impostorIndices.includes(index) ? 'impostor' : 'civil',
-            alive: true
-        }));
-
-        const currentImpostorIds = newPlayers.filter(p => p.role === 'impostor').map(p => p.id);
-        setLastImpostorIds(currentImpostorIds);
-
-        setPlayers(newPlayers);
-        setCurrentTurnIndex(0);
-        setIsRevealed(false);
-        setLastEliminated(null);
-        setWinnerTeam(null);
-        setStartingPlayerName(null);
-        setPhase('distribution');
-    };
-
-    const handleNextTurn = () => {
-        if (currentTurnIndex < players.length - 1) {
-            setIsRevealed(false);
-            setCurrentTurnIndex(currentTurnIndex + 1);
-        } else {
-            pickStartingPlayer(players);
-            setPhase('playing');
-            startTimerForRound();
-        }
-    };
-
-    const updateSessionStats = (winner, currentPlayers) => {
-        const newStats = { ...sessionStats };
-        currentPlayers.forEach(p => {
-            if (!newStats[p.id]) newStats[p.id] = { wins: 0, losses: 0, games: 0, impostorGames: 0 };
-            newStats[p.id].games += 1;
-            if (p.role === 'impostor') newStats[p.id].impostorGames += 1;
-            const isWinner = (winner === 'civil' && p.role === 'civil') || (winner === 'impostor' && p.role === 'impostor');
-            if (isWinner) newStats[p.id].wins += 1;
-            else newStats[p.id].losses += 1;
-        });
-        setSessionStats(newStats);
-    };
-
-    const checkWinCondition = (currentPlayers) => {
-        const aliveImpostors = currentPlayers.filter(p => p.alive && p.role === 'impostor').length;
-        const aliveCivilians = currentPlayers.filter(p => p.alive && p.role === 'civil').length;
-
-        if (aliveImpostors === 0) {
-            setWinnerTeam('civil');
-            updateSessionStats('civil', currentPlayers);
-            return true;
-        }
-        if (aliveImpostors >= aliveCivilians) {
-            setWinnerTeam('impostor');
-            updateSessionStats('impostor', currentPlayers);
-            return true;
-        }
-        return false;
-    };
-
-    const handleVote = (playerToEliminate) => {
-        if (!playerToEliminate) return;
-        setIsTimerRunning(false);
-
-        const updatedPlayers = players.map(p =>
-            p.id === playerToEliminate.id ? { ...p, alive: false } : p
-        );
-        setPlayers(updatedPlayers);
-        setLastEliminated(playerToEliminate);
-
-        const isGameOver = checkWinCondition(updatedPlayers);
-
-        if (isGameOver) {
-            setPhase('game_over');
-        } else {
-            setPhase('round_result');
-        }
-    };
-
-    const continueGame = () => {
-        pickStartingPlayer(players);
-        setPhase('playing');
-        setLastEliminated(null);
-        startTimerForRound();
-    };
-
-    const resetGame = () => {
-        setPhase('setup');
-        setLastEliminated(null);
-        setWinnerTeam(null);
-        setTimeLeft(0);
-        setIsTimerRunning(false);
-    };
-
-    // --- UI COMPONENTS ---
-
-    const TimerDisplay = () => (
-        <div className={`flex items-center gap-3 px-6 py-3 rounded-full border-2 mb-4 transition-all ${timeLeft <= 10 && timeLeft > 0 ? 'bg-red-500/20 border-red-500 animate-pulse' : 'bg-slate-900 border-slate-700'}`}>
-            <Clock size={24} className={timeLeft <= 10 ? 'text-red-500' : 'text-indigo-400'} />
-            <span className={`text-3xl font-mono font-bold ${timeLeft <= 10 ? 'text-red-500' : 'text-white'}`}>
-                {formatTime(timeLeft)}
-            </span>
-            <button
-                onClick={() => setIsTimerRunning(!isTimerRunning)}
-                className="ml-2 bg-slate-800 p-2 rounded-full hover:bg-slate-700 transition-colors"
-            >
-                {isTimerRunning ? <Pause size={16} fill="white" /> : <Play size={16} fill="white" />}
-            </button>
-        </div>
-    );
-
-    const StatsBoard = () => (
-        <div className="w-full bg-slate-900/80 rounded-2xl p-4 border border-slate-800 mb-6">
-            <h3 className="text-slate-400 text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
-                <BarChart2 size={14} /> Estadísticas de Sesión
-            </h3>
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-slate-500 uppercase bg-slate-900/50">
-                        <tr>
-                            <th className="px-3 py-2">Jugador</th>
-                            <th className="px-3 py-2 text-center">Wins</th>
-                            <th className="px-3 py-2 text-center">% Win</th>
-                            <th className="px-3 py-2 text-center">Rol</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                        {players.map(p => {
-                            const stats = sessionStats[p.id] || { wins: 0, games: 0, impostorGames: 0 };
-                            const winRate = stats.games > 0 ? Math.round((stats.wins / stats.games) * 100) : 0;
-                            const roleRatio = stats.games > 0 ?
-                                (stats.impostorGames > (stats.games / 2) ? '😈' : '🕵️') : '-';
-
-                            return (
-                                <tr key={p.id} className="bg-slate-900/30">
-                                    <td className="px-3 py-2 font-medium text-slate-200">{p.name}</td>
-                                    <td className="px-3 py-2 text-center text-emerald-400 font-bold">{stats.wins}</td>
-                                    <td className="px-3 py-2 text-center text-slate-400">{winRate}%</td>
-                                    <td className="px-3 py-2 text-center text-lg">{roleRatio}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-            <p className="text-[10px] text-slate-600 mt-2 text-center italic">
-                😈 = Suele ser Impostor | 🕵️ = Suele ser Civil
-            </p>
-        </div>
-    );
+    const {
+        phase, setPhase,
+        players, addPlayer, removePlayer, updateName,
+        sessionStats,
+        impostorCount, setImpostorCount,
+        showCategoryToImpostor, setShowCategoryToImpostor,
+        showHintToImpostor, setShowHintToImpostor,
+        selectedCategory, setSelectedCategory,
+        playedWords, clearHistory, noWordsError, setNoWordsError,
+        currentTurnIndex, isRevealed, setIsRevealed,
+        secretWord, activeCategory, impostorHint,
+        handleNextTurn, startGame,
+        startingPlayerName,
+        timeLeft, isTimerRunning, setIsTimerRunning,
+        lastEliminated, winnerTeam,
+        handleVote, continueGame, resetGame
+    } = useImpostorGame();
 
     if (phase === 'setup') {
         return (
@@ -487,7 +130,6 @@ export default function ImpostorGame() {
     // Distribution Phase
     if (phase === 'distribution') {
         const currentPlayer = players[currentTurnIndex];
-        // LOGICA NUEVA PARA DETECTAR CÓMPLICES
         const otherImpostors = players.filter(p => p.role === 'impostor' && p.id !== currentPlayer.id);
 
         return (
@@ -591,7 +233,11 @@ export default function ImpostorGame() {
                         )}
 
                         {/* TIMER */}
-                        <TimerDisplay />
+                        <TimerDisplay
+                            timeLeft={timeLeft}
+                            isTimerRunning={isTimerRunning}
+                            setIsTimerRunning={setIsTimerRunning}
+                        />
 
                         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6 w-full">
                             <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Categoría Pública</p>
@@ -614,7 +260,7 @@ export default function ImpostorGame() {
         );
     }
 
-    // Voting Phase (Same)
+    // Voting Phase
     if (phase === 'voting') {
         const alivePlayers = players.filter(p => p.alive);
         return (
@@ -643,7 +289,7 @@ export default function ImpostorGame() {
         );
     }
 
-    // Round Result (Same)
+    // Round Result
     if (phase === 'round_result') {
         const wasImpostor = lastEliminated.role === 'impostor';
         return (
@@ -699,7 +345,7 @@ export default function ImpostorGame() {
                             <p className="text-xl text-white font-bold">{secretWord}</p>
                         </div>
 
-                        <StatsBoard />
+                        <StatsBoard players={players} sessionStats={sessionStats} />
 
                         <div>
                             <p className="text-[10px] text-white/50 uppercase tracking-widest mb-2">Identidades esta ronda</p>

@@ -37,8 +37,16 @@ To generate the APK, follow these steps:
    ```bash
    npx cap open android
    ```
-   
-4. **Generate APK in Android Studio:**
+
+4. **Configure App Icon (Optional):**
+   - The generated logo is available at `resources/logo.png` in the project root.
+   - In Android Studio, right-click the `app/res` folder (in the Project view > Android > app > res).
+   - Select **New > Image Asset**.
+   - In the "Path" field, click the folder icon and locate `resources/logo.png`.
+   - Adjust the "Resize" slider to your liking.
+   - Click **Next**, then **Finish**. The new icons will be generated.
+
+5. **Generate APK in Android Studio:**
    - Wait for Gradle sync to finish.
    - Go to **Build** > **Build Bundle(s) / APK(s)** > **Build APK(s)**.
    - Once finished, click "locate" in the notification to find your `.apk` file.

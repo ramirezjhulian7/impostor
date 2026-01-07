@@ -30,16 +30,20 @@ export default function MultiplayerGame({ onBack }) {
     }, [playerName]);
 
     useEffect(() => {
-        let interval = null;
-        if (isLocalTimerRunning && localTimeLeft > 0) {
-            interval = setInterval(() => {
-                setLocalTimeLeft(prev => prev - 1);
-            }, 1000);
-        } else if (localTimeLeft === 0) {
-            setIsLocalTimerRunning(false);
-        }
+        if (!isLocalTimerRunning) return;
+
+        const interval = setInterval(() => {
+            setLocalTimeLeft(prev => {
+                if (prev <= 1) {
+                    setIsLocalTimerRunning(false);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
         return () => clearInterval(interval);
-    }, [isLocalTimerRunning, localTimeLeft]);
+    }, [isLocalTimerRunning]);
 
     useEffect(() => {
         if (phase === 'distribution') setRoleRevealed(false);
@@ -177,12 +181,16 @@ export default function MultiplayerGame({ onBack }) {
         const canStart = players.length >= 3;
         return (
             <div className="min-h-screen bg-slate-950 text-slate-100 p-4 font-sans max-w-md mx-auto flex flex-col">
-                <header className="py-6 flex justify-between items-center">
+                <header className="py-6 grid grid-cols-3 gap-2 items-start">
                     <div>
                         <h2 className="text-2xl font-black text-white">SALA</h2>
                         <div className="flex items-center gap-2 text-purple-400 font-mono text-xl font-bold bg-purple-500/10 px-3 py-1 rounded-lg border border-purple-500/30 mt-1 cursor-pointer" onClick={() => navigator.clipboard.writeText(roomCode)}>
                             {roomCode} <Copy size={14} className="opacity-50" />
                         </div>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Palabras Jugadas</p>
+                        <p className="text-2xl font-bold text-emerald-400">{playedWords.length}</p>
                     </div>
                     <div className="text-right">
                         <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Jugadores</p>

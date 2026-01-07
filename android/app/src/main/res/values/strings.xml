@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ImpostorGame</string>
+    <string name="title_activity_main">ImpostorGame</string>
+    <string name="package_name">com.impostor.game</string>
+    <string name="custom_url_scheme">com.impostor.game</string>
+</resources>

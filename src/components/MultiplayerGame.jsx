@@ -8,10 +8,10 @@ import TimerDisplay from './TimerDisplay';
 export default function MultiplayerGame({ onBack }) {
     const {
         roomCode, isHost, myPlayerId, players,
-        phase, settings, gameData,
+        phase, settings, gameData, playedWords,
         error, setError, isLoading,
         joinRoom, createRoom, updateSettings,
-        startGame, nextPhase, votePlayer, eliminatePlayer, resetGame
+        startGame, nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame
     } = useMultiplayerGame();
 
     const { serverUrl, updateServerUrl } = useSocket();
@@ -56,21 +56,39 @@ export default function MultiplayerGame({ onBack }) {
 
     const handleStartGame = () => {
         let cat = settings.category;
+
+        let availableWordsArr = [];
+
         if (cat === 'Aleatorio') {
-            const cats = Object.keys(WORD_DATA);
-            cat = cats[Math.floor(Math.random() * cats.length)];
+            Object.keys(WORD_DATA).forEach(c => {
+                WORD_DATA[c].forEach(item => {
+                    if (!playedWords.includes(item.word)) {
+                        availableWordsArr.push({ ...item, category: c });
+                    }
+                });
+            });
+        } else {
+            const words = WORD_DATA[cat];
+            availableWordsArr = words.filter(w => !playedWords.includes(w.word)).map(item => ({ ...item, category: cat }));
         }
 
-        const words = WORD_DATA[cat];
-        const randomWordObj = words[Math.floor(Math.random() * words.length)];
+        if (availableWordsArr.length === 0) {
+            // Fallback or Alert
+            // If strictly enforced, we stop. If loose, we fallback to all words.
+            setError('¡Se acabaron las palabras nuevas! Reinicia la sala para limpiar historial.');
+            return;
+        }
+
+        const randomWordObj = availableWordsArr[Math.floor(Math.random() * availableWordsArr.length)];
         const secretWord = randomWordObj.word;
         const impostorHint = randomWordObj.hint;
+        const activeCategory = randomWordObj.category;
 
         const startingPlayerIndex = Math.floor(Math.random() * players.length);
 
         startGame({
             secretWord,
-            activeCategory: cat,
+            activeCategory,
             impostorHint,
             startingPlayerIndex,
             timer: 180
@@ -372,21 +390,23 @@ export default function MultiplayerGame({ onBack }) {
                         })}
                     </div>
 
-                    <div className="mt-auto pb-6">
-                        {isHost ? (
+                    <div className="mt-auto pb-6 space-y-3">
+                        {/* Vote status for everyone including host */}
+                        <div className="text-center p-4 bg-slate-900 rounded-xl border border-slate-800">
+                            <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">Tu voto</p>
+                            <p className="text-white font-bold">
+                                {myVoteTargetId ? players.find(p => p.id === myVoteTargetId)?.name : 'Sin voto'}
+                            </p>
+                        </div>
+
+                        {/* End voting button only for host */}
+                        {isHost && (
                             <button
                                 onClick={endVoting}
                                 className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-900/30 transition-transform hover:scale-[1.02] flex items-center justify-center gap-2"
                             >
                                 <Skull size={20} /> FINALIZAR VOTACIÓN
                             </button>
-                        ) : (
-                            <div className="text-center p-4 bg-slate-900 rounded-xl border border-slate-800">
-                                <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">Tu voto</p>
-                                <p className="text-white font-bold">
-                                    {myVoteTargetId ? players.find(p => p.id === myVoteTargetId)?.name : 'Sin voto'}
-                                </p>
-                            </div>
                         )}
                     </div>
                 </div>

@@ -60,7 +60,8 @@ io.on('connection', (socket) => {
                 timer: 0,
                 lastEliminated: null,
                 winnerTeam: null
-            }
+            },
+            playedWords: []
         };
 
         socket.join(roomCode);
@@ -142,10 +143,16 @@ io.on('connection', (socket) => {
             room.gameData = { ...room.gameData, ...gameData };
             room.phase = 'distribution'; // Although effectively everyone gets it instantly
 
+            // Track played words
+            if (gameData.secretWord) {
+                room.playedWords.push(gameData.secretWord);
+            }
+
             io.to(roomCode).emit('game_started', {
                 players: room.players,
                 phase: 'distribution',
-                gameData: room.gameData
+                gameData: room.gameData,
+                playedWords: room.playedWords
             });
         }
     });
@@ -289,6 +296,8 @@ io.on('connection', (socket) => {
         if (room && room.hostId === socket.id) {
             room.phase = 'lobby';
             room.gameData = {}; // Clear game data
+            // We keep playedWords to maintain history until session ends or intentional clear
+
             room.players.forEach(p => {
                 p.role = null;
                 p.alive = true;

@@ -21,6 +21,7 @@ export function useMultiplayerGame() {
         category: 'Aleatorio'
     });
     const [gameData, setGameData] = useState({});
+    const [playedWords, setPlayedWords] = useState([]);
 
     useEffect(() => {
         if (!socket) return;
@@ -38,12 +39,14 @@ export function useMultiplayerGame() {
             setSettings(room.settings);
             setPhase(room.phase);
             setGameData(room.gameData);
+            if (room.playedWords) setPlayedWords(room.playedWords);
         });
 
         socket.on('game_started', (data) => {
             setPlayers(data.players);
             setPhase(data.phase);
             setGameData(data.gameData);
+            if (data.playedWords) setPlayedWords(data.playedWords);
         });
 
         socket.on('phase_change', (newPhase) => {
@@ -60,6 +63,7 @@ export function useMultiplayerGame() {
             setPlayers(room.players);
             setPhase(room.phase);
             setGameData({});
+            // Don't reset playedWords here automatically
         });
 
         socket.on('error', (data) => {
@@ -161,7 +165,7 @@ export function useMultiplayerGame() {
         // State
         isConnected, isLoading, error, setError,
         roomCode, isHost, myPlayerId, players,
-        phase, settings, gameData,
+        phase, settings, gameData, playedWords,
 
         // Actions
         connect,

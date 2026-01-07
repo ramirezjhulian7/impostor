@@ -78,31 +78,39 @@ export function useMultiplayerGame() {
         };
     }, [socket]);
 
+    // Pending Actions (to handle race condition where socket isn't ready yet)
+    const [pendingAction, setPendingAction] = useState(null); // { type: 'create' | 'join', payload: any }
+
+    useEffect(() => {
+        if (socket && isConnected && pendingAction) {
+            if (pendingAction.type === 'create') {
+                socket.emit('create_room', { playerName: pendingAction.payload.name });
+            } else if (pendingAction.type === 'join') {
+                socket.emit('join_room', { roomCode: pendingAction.payload.code, playerName: pendingAction.payload.name });
+            }
+            setPendingAction(null);
+        }
+    }, [socket, isConnected, pendingAction]);
+
     const joinRoom = (code, name) => {
-        if (!isConnected) connect();
-        setIsLoading(true);
-        // If socket is not yet connected, we might need to wait or the emit will buffer.
-        // But since we call connect(), it might take a moment. 
-        // A better pattern is to emit in useEffect when connected, but for simplicity:
-        if (socket) {
+        if (!isConnected) {
+            connect();
+            setPendingAction({ type: 'join', payload: { code: code.toUpperCase(), name } });
+            setIsLoading(true);
+        } else if (socket) {
+            setIsLoading(true);
             socket.emit('join_room', { roomCode: code.toUpperCase(), playerName: name });
-        } else {
-            // Retry once connected logic or just show error
-            setTimeout(() => {
-                if (socket) socket.emit('join_room', { roomCode: code.toUpperCase(), playerName: name });
-            }, 500);
         }
     };
 
     const createRoom = (name) => {
-        if (!isConnected) connect();
-        setIsLoading(true);
-        if (socket) {
+        if (!isConnected) {
+            connect();
+            setPendingAction({ type: 'create', payload: { name } });
+            setIsLoading(true);
+        } else if (socket) {
+            setIsLoading(true);
             socket.emit('create_room', { playerName: name });
-        } else {
-            setTimeout(() => {
-                // Accessing the *current* socket from context might require refetching context or depend on it being set
-            }, 500);
         }
     };
 

@@ -80,7 +80,7 @@ export default function MultiplayerGame({ onBack }) {
             <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans flex flex-col items-center justify-center">
                 <div className="max-w-md w-full space-y-8">
                     <header className="text-center relative">
-                        <button onClick={onBack} className="absolute left-0 top-1 text-slate-500 hover:text-white transition-colors">
+                        <button onClick={onBack} className="absolute left-0 top-6 p-2 z-50 text-slate-500 hover:text-white transition-colors">
                             <ArrowRight size={24} className="rotate-180" />
                         </button>
                         <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 tracking-tighter uppercase drop-shadow-sm">Impostor</h1>

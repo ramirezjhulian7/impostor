@@ -29,7 +29,7 @@ export default function LocalGame({ onBack }) {
             <div className="min-h-screen bg-slate-950 text-slate-100 p-4 font-sans selection:bg-indigo-500/30">
                 <div className="max-w-md mx-auto space-y-6">
                     <header className="text-center py-6 relative">
-                        <button onClick={onBack} className="absolute left-0 top-6 text-slate-500 hover:text-white transition-colors">
+                        <button onClick={onBack} className="absolute left-0 top-6 p-2 z-50 text-slate-500 hover:text-white transition-colors">
                             <ArrowRight size={24} className="rotate-180" />
                         </button>
                         <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 tracking-tighter uppercase drop-shadow-sm">Impostor</h1>

@@ -135,7 +135,13 @@ export function useMultiplayerGame() {
 
     const votePlayer = (targetId) => {
         if (socket) {
-            socket.emit('vote_player', { roomCode, targetId });
+            socket.emit('vote_player', { roomCode, targetId, voterId: myPlayerId });
+        }
+    };
+
+    const endVoting = () => {
+        if (socket && isHost) {
+            socket.emit('end_voting', { roomCode });
         }
     };
 
@@ -161,6 +167,6 @@ export function useMultiplayerGame() {
         connect,
         joinRoom, createRoom,
         updateSettings, startGame,
-        nextPhase, votePlayer, eliminatePlayer, resetGame
+        nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame
     };
 }

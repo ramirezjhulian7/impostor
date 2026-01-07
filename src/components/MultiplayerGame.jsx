@@ -64,11 +64,7 @@ export default function MultiplayerGame({ onBack }) {
         const words = WORD_DATA[cat];
         const randomWordObj = words[Math.floor(Math.random() * words.length)];
         const secretWord = randomWordObj.word;
-
-        // Get a different word for the hint
-        const hintOptions = words.filter(w => w.word !== secretWord);
-        const randomHintObj = hintOptions[Math.floor(Math.random() * hintOptions.length)];
-        const impostorHint = randomHintObj.word;
+        const impostorHint = randomWordObj.hint;
 
         const startingPlayerIndex = Math.floor(Math.random() * players.length);
 
@@ -313,26 +309,86 @@ export default function MultiplayerGame({ onBack }) {
     }
 
     if (phase === 'voting') {
-        const alivePlayers = players.filter(p => p.alive);
+        const isTieBreaker = gameData?.isTieBreaker;
+        const candidates = gameData?.tieCandidates || [];
+
+        // Filter players to show: normally everyone alive, but if tie-breaker only candidates
+        const playersToShow = players.filter(p => p.alive);
+
+        // If tie breaker, we still show everyone but visually dim non-candidates or just highlight candidates?
+        // Let's keep showing everyone but disable voting for non-candidates to keep context.
+
+        const myVoteTargetId = gameData?.votes?.[myPlayerId];
+        const amIAlive = players.find(me => me.id === myPlayerId)?.alive;
+
+        // Determine eligibility to vote: In tie breaker, usually everyone votes? Or only non-candidates?
+        // Standard Mafia/Among Us rules: Everyone alive votes.
+        const canVote = amIAlive;
+
         return (
             <div className="min-h-screen bg-slate-950 p-4 font-sans flex flex-col">
                 <div className="max-w-md mx-auto w-full flex-1 flex flex-col">
                     <header className="text-center py-6 mb-4">
-                        <AlertTriangle size={32} className="text-red-500 mx-auto mb-3" />
-                        <h2 className="text-2xl font-black text-white uppercase tracking-tight">Votación</h2>
-                        <p className="text-slate-400 text-sm">{isHost ? 'Toca para eliminar' : 'Discute quién debe salir'}</p>
+                        <AlertTriangle size={32} className={`mx-auto mb-3 ${isTieBreaker ? 'text-yellow-500 animate-bounce' : 'text-red-500'}`} />
+                        <h2 className="text-2xl font-black text-white uppercase tracking-tight">
+                            {isTieBreaker ? '¡EMPATE! Desempate' : 'Votación'}
+                        </h2>
+                        <p className="text-slate-400 text-sm">
+                            {isTieBreaker ? 'Vota por uno de los empatados' : 'Toca a un jugador para votar'}
+                        </p>
                     </header>
+
                     <div className="grid grid-cols-2 gap-3 mb-6">
-                        {alivePlayers.map(p => (
-                            <button key={p.id} onClick={() => isHost ? eliminatePlayer(p.id) : votePlayer(p.id)} disabled={!isHost && !players.find(me => me.id === myPlayerId)?.alive} className={`bg-slate-900 border border-slate-800 p-4 rounded-2xl transition-all group flex flex-col items-center gap-3 relative overflow-hidden ${isHost ? 'hover:bg-red-500/10 hover:border-red-500' : 'hover:bg-slate-800'}`}>
-                                <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center text-slate-300 font-bold text-lg group-hover:bg-red-500 group-hover:text-white transition-colors">{p.name.charAt(0)}</div>
-                                <span className="font-bold text-slate-200 text-sm truncate w-full text-center">{p.name}</span>
-                            </button>
-                        ))}
+                        {playersToShow.map(p => {
+                            const isCandidate = !isTieBreaker || candidates.includes(p.id);
+                            const isMyVote = myVoteTargetId === p.id;
+                            const voteCount = p.votes || 0;
+
+                            return (
+                                <button
+                                    key={p.id}
+                                    onClick={() => isCandidate && votePlayer(p.id)}
+                                    disabled={!canVote || !isCandidate}
+                                    className={`
+                                        bg-slate-900 border transition-all p-4 rounded-2xl flex flex-col items-center gap-3 relative overflow-visible
+                                        ${!isCandidate ? 'opacity-30 border-slate-800' :
+                                            isMyVote ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/50' :
+                                                'border-slate-800 hover:bg-slate-800'}
+                                    `}
+                                >
+                                    {/* Vote Count Badge */}
+                                    {voteCount > 0 && (
+                                        <div className="absolute -top-2 -right-2 bg-red-600/90 text-white w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shadow-lg z-10 animate-in zoom-in">
+                                            {voteCount}
+                                        </div>
+                                    )}
+
+                                    <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center text-slate-300 font-bold text-lg">
+                                        {p.name.charAt(0)}
+                                    </div>
+                                    <span className="font-bold text-slate-200 text-sm truncate w-full text-center">{p.name}</span>
+                                </button>
+                            );
+                        })}
                     </div>
-                    {isHost && (
-                        <div className="mt-auto pb-6"><button onClick={() => nextPhase('playing')} className="w-full bg-transparent border border-slate-700 text-slate-400 font-bold py-3 rounded-xl hover:bg-slate-900 text-sm">Cancelar y Volver al Debate</button></div>
-                    )}
+
+                    <div className="mt-auto pb-6">
+                        {isHost ? (
+                            <button
+                                onClick={endVoting}
+                                className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-900/30 transition-transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                            >
+                                <Skull size={20} /> FINALIZAR VOTACIÓN
+                            </button>
+                        ) : (
+                            <div className="text-center p-4 bg-slate-900 rounded-xl border border-slate-800">
+                                <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">Tu voto</p>
+                                <p className="text-white font-bold">
+                                    {myVoteTargetId ? players.find(p => p.id === myVoteTargetId)?.name : 'Sin voto'}
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         );

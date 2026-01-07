@@ -161,53 +161,125 @@ io.on('connection', (socket) => {
 
 
     // Vote
-    socket.on('vote_player', ({ roomCode, targetId }) => {
+    socket.on('vote_player', ({ roomCode, targetId, voterId }) => {
         const room = rooms[roomCode];
         if (room) {
-            // In a real implementation we might track who voted for whom to prevent double voting
-            // For simplicity, just increment count for now or broadcast the vote
-            // A better way for this app:
-            // 1. Host controls the flow. 
-            // 2. Or, we collect votes and Host reveals.
+            // Find voter and target
+            const voter = room.players.find(p => p.id === voterId);
+            const target = room.players.find(p => p.id === targetId);
 
-            // Let's implement real-time vote updates if everyone can see them, 
-            // or just send to everyone "someone voted"
+            if (voter && target && target.alive) {
+                // Remove previous vote if any
+                const previousVoteTargetId = room.gameData.votes?.[voterId];
+                if (previousVoteTargetId) {
+                    const previousTarget = room.players.find(p => p.id === previousVoteTargetId);
+                    if (previousTarget) previousTarget.votes--;
+                }
 
-            io.to(roomCode).emit('vote_cast', { targetId });
+                // Register new vote
+                if (!room.gameData.votes) room.gameData.votes = {};
+                room.gameData.votes[voterId] = targetId;
+                target.votes++;
+
+                io.to(roomCode).emit('update_room', room);
+            }
         }
     });
 
-    // Eliminate Player
+    // End Voting (Host only)
+    socket.on('end_voting', ({ roomCode }) => {
+        const room = rooms[roomCode];
+        if (room && room.hostId === socket.id) {
+
+            // Calculate max votes
+            let maxVotes = -1;
+            let candidates = [];
+
+            // Only consider alive players and players eligible for voting (in case of tie breaker)
+            const eligibleTargets = room.gameData.tieCandidates
+                ? room.players.filter(p => room.gameData.tieCandidates.includes(p.id))
+                : room.players.filter(p => p.alive);
+
+            eligibleTargets.forEach(p => {
+                if (p.votes > maxVotes) {
+                    maxVotes = p.votes;
+                    candidates = [p];
+                } else if (p.votes === maxVotes) {
+                    candidates.push(p);
+                }
+            });
+
+            // Logic for Elimination vs Tie
+            if (candidates.length === 1) {
+                // Clear winner
+                const victim = candidates[0];
+                eliminatePlayer(roomCode, victim.id, false); // false = not random
+            } else {
+                // TIE DETECTED
+                if (room.gameData.isTieBreaker) {
+                    // Second tie -> Random elimination
+                    const victim = candidates[Math.floor(Math.random() * candidates.length)];
+                    eliminatePlayer(roomCode, victim.id, true); // true = random
+                } else {
+                    // First tie -> Tie Breaker Round
+                    room.phase = 'voting'; // Stay in voting but filtered
+                    room.gameData.isTieBreaker = true;
+                    room.gameData.tieCandidates = candidates.map(c => c.id);
+
+                    // Reset votes for next round
+                    room.players.forEach(p => p.votes = 0);
+                    room.gameData.votes = {};
+
+                    io.to(roomCode).emit('tie_breaker', { candidates: room.gameData.tieCandidates });
+                    io.to(roomCode).emit('update_room', room);
+                }
+            }
+        }
+    });
+
+    // Helper for elimination to reuse in both scenarios
+    const eliminatePlayer = (roomCode, playerId, isRandom) => {
+        const room = rooms[roomCode];
+        const player = room.players.find(p => p.id === playerId);
+        if (player) {
+            player.alive = false;
+            room.gameData.lastEliminated = player;
+            room.gameData.eliminationReason = isRandom ? 'Azar (Empate)' : 'Votación';
+
+            // Check win condition
+            const aliveImpostors = room.players.filter(p => p.role === 'impostor' && p.alive).length;
+            const aliveCivilians = room.players.filter(p => p.role === 'civilian' && p.alive).length;
+
+            let nextPhase = 'round_result';
+
+            if (aliveImpostors === 0) {
+                room.gameData.winnerTeam = 'civilian';
+                nextPhase = 'game_over';
+            } else if (aliveImpostors >= aliveCivilians) {
+                room.gameData.winnerTeam = 'impostor';
+                nextPhase = 'game_over';
+            }
+
+            room.phase = nextPhase;
+            // Clear tie breaker state
+            room.gameData.isTieBreaker = false;
+            room.gameData.tieCandidates = null;
+            room.players.forEach(p => p.votes = 0);
+            room.gameData.votes = {};
+
+            io.to(roomCode).emit('player_eliminated', {
+                eliminatedId: playerId,
+                nextPhase: nextPhase,
+                gameData: room.gameData
+            });
+        }
+    };
+
+    // Eliminate Player (Manual/Forced) - kept for legacy or if needed, but end_voting is preferred
     socket.on('eliminate_player', ({ roomCode, playerId }) => {
         const room = rooms[roomCode];
         if (room && room.hostId === socket.id) {
-            const player = room.players.find(p => p.id === playerId);
-            if (player) {
-                player.alive = false;
-                room.gameData.lastEliminated = player;
-
-                // Check win condition
-                const aliveImpostors = room.players.filter(p => p.role === 'impostor' && p.alive).length;
-                const aliveCivilians = room.players.filter(p => p.role === 'civilian' && p.alive).length;
-
-                let nextPhase = 'round_result';
-
-                if (aliveImpostors === 0) {
-                    room.gameData.winnerTeam = 'civilian';
-                    nextPhase = 'game_over';
-                } else if (aliveImpostors >= aliveCivilians) {
-                    room.gameData.winnerTeam = 'impostor';
-                    nextPhase = 'game_over';
-                }
-
-                room.phase = nextPhase;
-
-                io.to(roomCode).emit('player_eliminated', {
-                    eliminatedId: playerId,
-                    nextPhase: nextPhase,
-                    gameData: room.gameData
-                });
-            }
+            eliminatePlayer(roomCode, playerId, false);
         }
     });
 

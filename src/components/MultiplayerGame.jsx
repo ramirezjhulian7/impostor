@@ -30,6 +30,18 @@ export default function MultiplayerGame({ onBack }) {
     }, [playerName]);
 
     useEffect(() => {
+        let interval = null;
+        if (isLocalTimerRunning && localTimeLeft > 0) {
+            interval = setInterval(() => {
+                setLocalTimeLeft(prev => prev - 1);
+            }, 1000);
+        } else if (localTimeLeft === 0) {
+            setIsLocalTimerRunning(false);
+        }
+        return () => clearInterval(interval);
+    }, [isLocalTimerRunning, localTimeLeft]);
+
+    useEffect(() => {
         if (phase === 'distribution') setRoleRevealed(false);
         if (phase === 'playing') {
             setLocalTimeLeft(180);

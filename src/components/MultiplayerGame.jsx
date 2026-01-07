@@ -213,9 +213,20 @@ export default function MultiplayerGame({ onBack }) {
     }
 
     if (phase === 'distribution') {
-        const secretWord = gameData.secretWord;
-        const activeCategory = gameData.activeCategory;
-        const hint = gameData.impostorHint;
+        const secretWord = gameData?.secretWord;
+        const activeCategory = gameData?.activeCategory;
+        const hint = gameData?.impostorHint;
+
+        // Safety check to prevent crash if data hasn't arrived
+        if (!myPlayer || (!isImpostor && !secretWord)) {
+            return (
+                <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+                    <Loader className="animate-spin mx-auto text-purple-500 mb-4" size={48} />
+                    <p className="text-slate-400">Sincronizando partida...</p>
+                </div>
+            );
+        }
+
         return (
             <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-full max-w-md">

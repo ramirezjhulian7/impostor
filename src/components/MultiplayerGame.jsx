@@ -62,8 +62,14 @@ export default function MultiplayerGame({ onBack }) {
         }
 
         const words = WORD_DATA[cat];
-        const secretWord = words[Math.floor(Math.random() * words.length)];
-        const impostorHint = words.filter(w => w !== secretWord)[Math.floor(Math.random() * (words.length - 1))];
+        const randomWordObj = words[Math.floor(Math.random() * words.length)];
+        const secretWord = randomWordObj.word;
+
+        // Get a different word for the hint
+        const hintOptions = words.filter(w => w.word !== secretWord);
+        const randomHintObj = hintOptions[Math.floor(Math.random() * hintOptions.length)];
+        const impostorHint = randomHintObj.word;
+
         const startingPlayerIndex = Math.floor(Math.random() * players.length);
 
         startGame({

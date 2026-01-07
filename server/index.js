@@ -61,7 +61,8 @@ io.on('connection', (socket) => {
                 lastEliminated: null,
                 winnerTeam: null
             },
-            playedWords: []
+            playedWords: [],
+            lastImpostorIds: []
         };
 
         socket.join(roomCode);
@@ -129,15 +130,28 @@ io.on('connection', (socket) => {
                 p.votes = 0;
             });
 
-            // Randomly select impostors
-            let assignedImpostors = 0;
-            while (assignedImpostors < impostorCount) {
-                const randIndex = Math.floor(Math.random() * players.length);
-                if (players[randIndex].role !== 'impostor') {
-                    players[randIndex].role = 'impostor';
-                    assignedImpostors++;
-                }
-            }
+            // Smart impostor selection (avoid repeating same players)
+            let availableIndices = players.map((_, i) => i);
+
+            // Prioritize players who weren't impostors last time
+            const priorityIndices = availableIndices.filter(idx =>
+                !room.lastImpostorIds.includes(players[idx].id)
+            );
+
+            // Use priority list if it has enough candidates, otherwise use all
+            let candidates = priorityIndices.length >= impostorCount ? priorityIndices : availableIndices;
+
+            // Shuffle candidates
+            candidates = candidates.sort(() => Math.random() - 0.5);
+
+            // Select impostors from shuffled candidates
+            const selectedIndices = candidates.slice(0, impostorCount);
+            selectedIndices.forEach(idx => {
+                players[idx].role = 'impostor';
+            });
+
+            // Update lastImpostorIds for next round
+            room.lastImpostorIds = selectedIndices.map(idx => players[idx].id);
 
             // Set Game Data
             room.gameData = { ...room.gameData, ...gameData };

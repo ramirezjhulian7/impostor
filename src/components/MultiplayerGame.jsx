@@ -11,7 +11,7 @@ export default function MultiplayerGame({ onBack }) {
         phase, settings, gameData, playedWords,
         error, setError, isLoading,
         joinRoom, createRoom, updateSettings,
-        startGame, nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame
+        startGame, nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer
     } = useMultiplayerGame();
 
     const { serverUrl, updateServerUrl } = useSocket();
@@ -208,6 +208,11 @@ export default function MultiplayerGame({ onBack }) {
                                 <span className={`text-sm font-bold truncate ${p.id === myPlayerId ? 'text-purple-400' : 'text-slate-300'}`}>
                                     {p.name} {p.isHost && '👑'}
                                 </span>
+                                {isHost && !p.isHost && (
+                                    <button onClick={() => kickPlayer(p.id)} className="ml-auto text-red-500 hover:bg-red-500/10 p-1 rounded transition-colors" title="Expulsar">
+                                        <UserX size={16} />
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -227,6 +232,10 @@ export default function MultiplayerGame({ onBack }) {
                                 <label className="flex items-center justify-between cursor-pointer p-2 bg-slate-950 rounded-xl border border-slate-800">
                                     <span className="text-xs text-slate-300">Mostrar Categoría</span>
                                     <input type="checkbox" checked={settings.showCategory} onChange={() => updateSettings({ showCategory: !settings.showCategory })} className="accent-purple-500" />
+                                </label>
+                                <label className="flex items-center justify-between cursor-pointer p-2 bg-slate-950 rounded-xl border border-slate-800">
+                                    <span className="text-xs text-slate-300">Votación Anónima</span>
+                                    <input type="checkbox" checked={settings.anonymousVoting} onChange={() => updateSettings({ anonymousVoting: !settings.anonymousVoting })} className="accent-purple-500" />
                                 </label>
                             </div>
                             <select value={settings.category} onChange={(e) => updateSettings({ category: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-300 text-xs">
@@ -322,7 +331,7 @@ export default function MultiplayerGame({ onBack }) {
         const aliveCount = players.filter(p => p.alive).length;
         const startingPlayer = players[gameData.startingPlayerIndex];
         return (
-            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+            <div className={`min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center transition-colors duration-500 ${localTimeLeft < 10 && localTimeLeft > 0 ? 'bg-red-950/30 shadow-[inset_0_0_100px_rgba(220,38,38,0.2)]' : ''}`}>
                 <div className="max-w-md w-full space-y-6">
                     <div className="bg-slate-900/80 p-8 rounded-3xl border border-slate-800 shadow-2xl relative flex flex-col items-center">
                         <div className="absolute top-4 right-4"><div className={`w-3 h-3 rounded-full ${isLocalTimerRunning ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div></div>
@@ -381,6 +390,9 @@ export default function MultiplayerGame({ onBack }) {
                             const isCandidate = !isTieBreaker || candidates.includes(p.id);
                             const isMyVote = myVoteTargetId === p.id;
                             const voteCount = p.votes || 0;
+                            const showDetailedVotes = !settings.anonymousVoting && gameData?.votes;
+                            // Check who voted for this player if detailed is on
+                            const votersForThis = showDetailedVotes ? Object.keys(gameData.votes).filter(voterId => gameData.votes[voterId] === p.id) : [];
 
                             return (
                                 <button
@@ -405,6 +417,20 @@ export default function MultiplayerGame({ onBack }) {
                                         {p.name.charAt(0)}
                                     </div>
                                     <span className="font-bold text-slate-200 text-sm truncate w-full text-center">{p.name}</span>
+
+                                    {/* Show voters rings (non-anonymous only) */}
+                                    {showDetailedVotes && votersForThis.length > 0 && (
+                                        <div className="flex -space-x-2 mt-1">
+                                            {votersForThis.map(voterId => {
+                                                const v = players.find(u => u.id === voterId);
+                                                return v ? (
+                                                    <div key={voterId} className="w-6 h-6 rounded-full bg-slate-700 border border-slate-900 flex items-center justify-center text-[8px] text-white" title={v.name}>
+                                                        {v.name.charAt(0)}
+                                                    </div>
+                                                ) : null;
+                                            })}
+                                        </div>
+                                    )}
                                 </button>
                             );
                         })}
@@ -443,7 +469,15 @@ export default function MultiplayerGame({ onBack }) {
                     <h2 className="text-slate-400 text-xs uppercase tracking-widest mb-4">Resultado</h2>
                     <div className="mb-6">
                         <div className="text-3xl font-black text-white mb-2">{lastEliminated?.name}</div>
-                        <div className={`text-xl font-bold inline-block px-4 py-1 rounded-full ${wasImpostor ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-blue-500/20 text-blue-400 border border-blue-500/50'}`}>{wasImpostor ? 'ERA EL IMPOSTOR' : 'ERA UN CIVIL'}</div>
+
+                        <div className="relative h-12 flex items-center justify-center overflow-hidden">
+                            {/* Reveal Animation */}
+                            <div className="animate-in slide-in-from-bottom duration-1000 fill-mode-forwards delay-500 flex flex-col items-center">
+                                <div className={`text-xl font-bold inline-block px-4 py-1 rounded-full ${wasImpostor ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-blue-500/20 text-blue-400 border border-blue-500/50'} shadow-[0_0_30px_rgba(255,255,255,0.1)]`}>
+                                    {wasImpostor ? 'ERA EL IMPOSTOR' : 'ERA UN CIVIL'}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div className="space-y-4 mb-8">
                         <div className="flex justify-between items-center bg-slate-950 p-4 rounded-xl border border-slate-800">

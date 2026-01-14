@@ -35,6 +35,17 @@ const sanitizeRoomForPlayer = (room, playerId) => {
     const requestingPlayer = cleanRoom.players.find(p => p.id === playerId);
     if (!requestingPlayer) return cleanRoom;
 
+    // Anonymous Voting Logic
+    if (cleanRoom.phase === 'voting' && cleanRoom.settings.anonymousVoting) {
+        // Hide WHO voted for WHOM in specific votes map
+        // We still keep the 'votes' count on players so people know who is winning
+        if (cleanRoom.gameData && cleanRoom.gameData.votes) {
+            // We can just nullify the votes map for clients, 
+            // but we must preserve the VOTE COUNTS on the player objects themselves (which are already safe-ish)
+            delete cleanRoom.gameData.votes;
+        }
+    }
+
     cleanRoom.players = cleanRoom.players.map(p => {
         if (p.id === playerId) return p;
         if (!p.role) return p;
@@ -81,14 +92,16 @@ io.on('connection', (socket) => {
                 isHost: true,
                 role: null, // 'impostor' or 'civilian'
                 alive: true,
-                votes: 0
+                votes: 0,
+                connected: true
             }],
             phase: 'lobby', // lobby, playing, voting, result, game_over
             settings: {
                 impostorCount: 1,
                 showHint: false,
                 showCategory: false,
-                category: 'Aleatorio'
+                category: 'Aleatorio',
+                anonymousVoting: false
             },
             gameData: {
                 secretWord: '',
@@ -120,6 +133,18 @@ io.on('connection', (socket) => {
 
             const existingPlayer = room.players.find(p => p.name === playerName);
             if (existingPlayer) {
+                // Reconnection Logic
+                if (!existingPlayer.connected) {
+                    existingPlayer.connected = true;
+                    existingPlayer.id = socket.id; // Update socket ID
+                    socket.join(roomCode);
+
+                    socket.emit('room_joined', { roomCode, isHost: existingPlayer.isHost, playerId: socket.id });
+                    broadcastRoomUpdate(roomCode);
+                    console.log(`${playerName} reconnected to room ${roomCode}`);
+                    return;
+                }
+
                 socket.emit('error', { message: 'Nombre ya en uso' });
                 return;
             }
@@ -130,7 +155,8 @@ io.on('connection', (socket) => {
                 isHost: false,
                 role: null,
                 alive: true,
-                votes: 0
+                votes: 0,
+                connected: true
             };
 
             room.players.push(newPlayer);
@@ -339,7 +365,6 @@ io.on('connection', (socket) => {
 
     // Reset Game
     socket.on('reset_game', ({ roomCode }) => {
-        const room = rooms[roomCode];
         if (room && room.hostId === socket.id) {
             room.phase = 'lobby';
             room.gameData = {}; // Clear game data
@@ -354,26 +379,61 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
-        // Clean up rooms if empty or handle player drop (reconnect logic is complex, skipping for MVP)
-        for (const code in rooms) {
-            const room = rooms[code];
-            const playerIndex = room.players.findIndex(p => p.id === socket.id);
-            if (playerIndex !== -1) {
-                const player = room.players[playerIndex];
+    // Kick Player (Host only)
+    socket.on('kick_player', ({ roomCode, playerId }) => {
+        const room = rooms[roomCode];
+        if (room && room.hostId === socket.id) {
+            const playerIndex = room.players.findIndex(p => p.id === playerId);
+            if (playerIndex !== -1 && !room.players[playerIndex].isHost) {
+                const kickedSocketId = room.players[playerIndex].id;
                 room.players.splice(playerIndex, 1);
 
-                if (room.players.length === 0) {
-                    delete rooms[code];
-                } else {
-                    // Update room for others
-                    if (player.isHost) {
-                        // Assign new host
-                        room.players[0].isHost = true;
-                        room.hostId = room.players[0].id;
+                // Notify kicked player
+                io.to(kickedSocketId).emit('error', { message: 'Has sido expulsado de la sala.' });
+                io.sockets.sockets.get(kickedSocketId)?.leave(roomCode);
+
+                broadcastRoomUpdate(roomCode);
+            }
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+
+        for (const code in rooms) {
+            const room = rooms[code];
+            const player = room.players.find(p => p.id === socket.id);
+
+            if (player) {
+                player.connected = false;
+
+                // If it's lobby, maybe we remove them? For now, let's keep them 'ghosted' 
+                // but if we want to support reconnection we shouldn't delete immediately.
+                // However, infinite ghosts is bad. 
+                // Compromise: Mark as disconnected. If host disconnects, maybe complex handling needed.
+
+                // For MVP Reconnection: Just mark disconnected and update room
+                broadcastRoomUpdate(code);
+
+                // Cleanup logic could be here (e.g. set timeout to delete player if not back in 5 mins)
+                // But for now we leave them in the list so they can rejoin.
+
+                // Wait... if they are in lobby and disconnect, maybe we should remove them to free up the name/slot?
+                // If game in progress -> Keep them. If Lobby -> Remove them?
+                if (room.phase === 'lobby') {
+                    // Remove from lobby to keep it clean, unless we want persistence there too.
+                    // Let's remove in lobby for cleaner experience, Reconnect is mostly for "Oops I refreshed mid-game"
+                    const index = room.players.indexOf(player);
+                    room.players.splice(index, 1);
+                    if (room.players.length === 0) {
+                        delete rooms[code];
+                    } else {
+                        if (player.isHost) {
+                            room.players[0].isHost = true;
+                            room.hostId = room.players[0].id;
+                        }
+                        broadcastRoomUpdate(code);
                     }
-                    broadcastRoomUpdate(code);
                 }
                 break;
             }

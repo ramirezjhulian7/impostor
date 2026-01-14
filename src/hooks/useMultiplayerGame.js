@@ -18,7 +18,8 @@ export function useMultiplayerGame() {
         impostorCount: 1,
         showHint: false,
         showCategory: false,
-        category: 'Aleatorio'
+        category: 'Aleatorio',
+        anonymousVoting: false
     });
     const [gameData, setGameData] = useState({});
     const [playedWords, setPlayedWords] = useState([]);
@@ -30,6 +31,7 @@ export function useMultiplayerGame() {
             setRoomCode(data.roomCode);
             setIsHost(data.isHost);
             setMyPlayerId(data.playerId);
+            localStorage.setItem('impostor_room', data.roomCode); // Save for reconnect
             setIsLoading(false);
             setError(null);
         });
@@ -81,6 +83,24 @@ export function useMultiplayerGame() {
             socket.off('error');
         };
     }, [socket]);
+
+    // Auto Reconnect
+    useEffect(() => {
+        const savedRoom = localStorage.getItem('impostor_room');
+        const savedName = localStorage.getItem('impostor_name');
+
+        if (savedRoom && savedName && !roomCode) {
+            // Attempt reconnect logic
+            // We need to wait for socket to be ready
+            if (!isConnected) {
+                console.log('Detected saved session, connecting...');
+                connect();
+                // pendingAction will handle the join when connected
+                setPendingAction({ type: 'join', payload: { code: savedRoom, name: savedName } });
+                setIsLoading(true);
+            }
+        }
+    }, [roomCode, isConnected]); // Only run if roomCode is missing
 
     // Pending Actions (to handle race condition where socket isn't ready yet)
     const [pendingAction, setPendingAction] = useState(null); // { type: 'create' | 'join', payload: any }
@@ -161,6 +181,12 @@ export function useMultiplayerGame() {
         }
     };
 
+    const kickPlayer = (targetId) => {
+        if (socket && isHost) {
+            socket.emit('kick_player', { roomCode, playerId: targetId });
+        }
+    };
+
     return {
         // State
         isConnected, isLoading, error, setError,
@@ -171,6 +197,6 @@ export function useMultiplayerGame() {
         connect,
         joinRoom, createRoom,
         updateSettings, startGame,
-        nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame
+        nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer
     };
 }

@@ -28,6 +28,44 @@ const generateRoomCode = () => {
     return result;
 };
 
+const sanitizeRoomForPlayer = (room, playerId) => {
+    const cleanRoom = JSON.parse(JSON.stringify(room));
+    if (cleanRoom.phase === 'game_over') return cleanRoom;
+
+    const requestingPlayer = cleanRoom.players.find(p => p.id === playerId);
+    if (!requestingPlayer) return cleanRoom;
+
+    cleanRoom.players = cleanRoom.players.map(p => {
+        if (p.id === playerId) return p;
+        if (!p.role) return p;
+        if (requestingPlayer.role === 'impostor' && p.role === 'impostor') return p;
+        return { ...p, role: 'civilian' };
+    });
+    return cleanRoom;
+};
+
+const broadcastRoomUpdate = (roomCode) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+    room.players.forEach(player => {
+        io.to(player.id).emit('update_room', sanitizeRoomForPlayer(room, player.id));
+    });
+};
+
+const broadcastGameStarted = (roomCode) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+    room.players.forEach(player => {
+        const data = sanitizeRoomForPlayer(room, player.id);
+        io.to(player.id).emit('game_started', {
+            players: data.players,
+            phase: 'distribution',
+            gameData: room.gameData,
+            playedWords: room.playedWords
+        });
+    });
+};
+
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
@@ -67,7 +105,7 @@ io.on('connection', (socket) => {
 
         socket.join(roomCode);
         socket.emit('room_joined', { roomCode, isHost: true, playerId: socket.id });
-        io.to(roomCode).emit('update_room', rooms[roomCode]);
+        broadcastRoomUpdate(roomCode);
         console.log(`Room ${roomCode} created by ${playerName}`);
     });
 
@@ -99,7 +137,7 @@ io.on('connection', (socket) => {
             socket.join(roomCode);
 
             socket.emit('room_joined', { roomCode, isHost: false, playerId: socket.id });
-            io.to(roomCode).emit('update_room', room);
+            broadcastRoomUpdate(roomCode);
             console.log(`${playerName} joined room ${roomCode}`);
         } else {
             socket.emit('error', { message: 'Sala no encontrada' });
@@ -111,7 +149,7 @@ io.on('connection', (socket) => {
         const room = rooms[roomCode];
         if (room && room.hostId === socket.id) {
             room.settings = { ...room.settings, ...settings };
-            io.to(roomCode).emit('update_room', room);
+            broadcastRoomUpdate(roomCode);
         }
     });
 
@@ -162,12 +200,7 @@ io.on('connection', (socket) => {
                 room.playedWords.push(gameData.secretWord);
             }
 
-            io.to(roomCode).emit('game_started', {
-                players: room.players,
-                phase: 'distribution',
-                gameData: room.gameData,
-                playedWords: room.playedWords
-            });
+            broadcastGameStarted(roomCode);
         }
     });
 
@@ -202,7 +235,7 @@ io.on('connection', (socket) => {
                 room.gameData.votes[voterId] = targetId;
                 target.votes++;
 
-                io.to(roomCode).emit('update_room', room);
+                broadcastRoomUpdate(roomCode);
             }
         }
     });
@@ -252,7 +285,7 @@ io.on('connection', (socket) => {
                     room.gameData.votes = {};
 
                     io.to(roomCode).emit('tie_breaker', { candidates: room.gameData.tieCandidates });
-                    io.to(roomCode).emit('update_room', room);
+                    broadcastRoomUpdate(roomCode);
                 }
             }
         }
@@ -340,7 +373,7 @@ io.on('connection', (socket) => {
                         room.players[0].isHost = true;
                         room.hostId = room.players[0].id;
                     }
-                    io.to(code).emit('update_room', room);
+                    broadcastRoomUpdate(code);
                 }
                 break;
             }

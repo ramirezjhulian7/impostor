@@ -5,6 +5,69 @@ import { useSocket } from '../context/SocketContext';
 import { WORD_DATA } from '../data/words';
 import TimerDisplay from './TimerDisplay';
 
+// Palette of distinct colors for player identification
+const PLAYER_COLORS = [
+    'bg-rose-500',
+    'bg-amber-500',
+    'bg-emerald-500',
+    'bg-cyan-500',
+    'bg-violet-500',
+    'bg-pink-500',
+    'bg-lime-500',
+    'bg-orange-500',
+    'bg-teal-500',
+    'bg-indigo-500',
+    'bg-fuchsia-500',
+    'bg-sky-500',
+];
+
+// Generate unique 2-character initials for each player
+function generateUniqueInitials(players) {
+    const initialsMap = {};
+    const usedInitials = new Set();
+
+    // Sort players by id for consistent ordering
+    const sortedPlayers = [...players].sort((a, b) => a.id.localeCompare(b.id));
+
+    for (const player of sortedPlayers) {
+        const name = player.name.toUpperCase().replace(/\s+/g, '');
+        let initials = '';
+
+        // Strategy 1: First letter + first consonant after first letter
+        const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
+        const firstLetter = name.charAt(0);
+
+        for (let i = 1; i < name.length; i++) {
+            const candidate = firstLetter + name.charAt(i);
+            if (!usedInitials.has(candidate)) {
+                initials = candidate;
+                break;
+            }
+        }
+
+        // Strategy 2: First letter + index number if still no unique
+        if (!initials || usedInitials.has(initials)) {
+            let counter = 1;
+            while (usedInitials.has(firstLetter + counter)) {
+                counter++;
+            }
+            initials = firstLetter + counter;
+        }
+
+        usedInitials.add(initials);
+        initialsMap[player.id] = initials;
+    }
+
+    return initialsMap;
+}
+
+// Get consistent color for a player based on their position
+function getPlayerColor(playerId, players) {
+    const sortedPlayers = [...players].sort((a, b) => a.id.localeCompare(b.id));
+    const index = sortedPlayers.findIndex(p => p.id === playerId);
+    return PLAYER_COLORS[index % PLAYER_COLORS.length];
+}
+
 export default function MultiplayerGame({ onBack }) {
     const {
         roomCode, isHost, myPlayerId, players,
@@ -242,16 +305,16 @@ export default function MultiplayerGame({ onBack }) {
                                             <div
                                                 key={name}
                                                 className={`flex justify-between items-center p-3 rounded-xl border ${index === 0 ? 'bg-amber-500/20 border-amber-500/50' :
-                                                        index === 1 ? 'bg-slate-500/20 border-slate-400/50' :
-                                                            index === 2 ? 'bg-orange-900/20 border-orange-700/50' :
-                                                                'bg-slate-950 border-slate-800'
+                                                    index === 1 ? 'bg-slate-500/20 border-slate-400/50' :
+                                                        index === 2 ? 'bg-orange-900/20 border-orange-700/50' :
+                                                            'bg-slate-950 border-slate-800'
                                                     }`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <span className={`text-lg font-black ${index === 0 ? 'text-amber-400' :
-                                                            index === 1 ? 'text-slate-300' :
-                                                                index === 2 ? 'text-orange-500' :
-                                                                    'text-slate-500'
+                                                        index === 1 ? 'text-slate-300' :
+                                                            index === 2 ? 'text-orange-500' :
+                                                                'text-slate-500'
                                                         }`}>
                                                         #{index + 1}
                                                     </span>
@@ -524,54 +587,63 @@ export default function MultiplayerGame({ onBack }) {
                     </header>
 
                     <div className="grid grid-cols-2 gap-3 mb-6">
-                        {playersToShow.map(p => {
-                            const isCandidate = !isTieBreaker || candidates.includes(p.id);
-                            const isMyVote = myVoteTargetId === p.id;
-                            const voteCount = p.votes || 0;
-                            const showDetailedVotes = !settings.anonymousVoting && gameData?.votes;
-                            // Check who voted for this player if detailed is on
-                            const votersForThis = showDetailedVotes ? Object.keys(gameData.votes).filter(voterId => gameData.votes[voterId] === p.id) : [];
+                        {(() => {
+                            // Pre-compute unique initials for all players
+                            const playerInitials = generateUniqueInitials(players);
 
-                            return (
-                                <button
-                                    key={p.id}
-                                    onClick={() => isCandidate && votePlayer(p.id)}
-                                    disabled={!canVote || !isCandidate}
-                                    className={`
-                                        bg-slate-900 border transition-all p-4 rounded-2xl flex flex-col items-center gap-3 relative overflow-visible
-                                        ${!isCandidate ? 'opacity-30 border-slate-800' :
-                                            isMyVote ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/50' :
-                                                'border-slate-800 hover:bg-slate-800'}
-                                    `}
-                                >
-                                    {/* Vote Count Badge */}
-                                    {voteCount > 0 && (
-                                        <div className="absolute -top-2 -right-2 bg-red-600/90 text-white w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shadow-lg z-10 animate-in zoom-in">
-                                            {voteCount}
+                            return playersToShow.map(p => {
+                                const isCandidate = !isTieBreaker || candidates.includes(p.id);
+                                const isMyVote = myVoteTargetId === p.id;
+                                const voteCount = p.votes || 0;
+                                const showDetailedVotes = !settings.anonymousVoting && gameData?.votes;
+                                // Check who voted for this player if detailed is on
+                                const votersForThis = showDetailedVotes ? Object.keys(gameData.votes).filter(voterId => gameData.votes[voterId] === p.id) : [];
+
+                                return (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => isCandidate && votePlayer(p.id)}
+                                        disabled={!canVote || !isCandidate}
+                                        className={`
+                                            bg-slate-900 border transition-all p-4 rounded-2xl flex flex-col items-center gap-3 relative overflow-visible
+                                            ${!isCandidate ? 'opacity-30 border-slate-800' :
+                                                isMyVote ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/50' :
+                                                    'border-slate-800 hover:bg-slate-800'}
+                                        `}
+                                    >
+                                        {/* Vote Count Badge */}
+                                        {voteCount > 0 && (
+                                            <div className="absolute -top-2 -right-2 bg-red-600/90 text-white w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shadow-lg z-10 animate-in zoom-in">
+                                                {voteCount}
+                                            </div>
+                                        )}
+
+                                        <div className={`w-12 h-12 ${getPlayerColor(p.id, players)} rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg`}>
+                                            {playerInitials[p.id]}
                                         </div>
-                                    )}
+                                        <span className="font-bold text-slate-200 text-sm truncate w-full text-center">{p.name}</span>
 
-                                    <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center text-slate-300 font-bold text-lg">
-                                        {p.name.charAt(0)}
-                                    </div>
-                                    <span className="font-bold text-slate-200 text-sm truncate w-full text-center">{p.name}</span>
-
-                                    {/* Show voters rings (non-anonymous only) */}
-                                    {showDetailedVotes && votersForThis.length > 0 && (
-                                        <div className="flex -space-x-2 mt-1">
-                                            {votersForThis.map(voterId => {
-                                                const v = players.find(u => u.id === voterId);
-                                                return v ? (
-                                                    <div key={voterId} className="w-6 h-6 rounded-full bg-slate-700 border border-slate-900 flex items-center justify-center text-[8px] text-white" title={v.name}>
-                                                        {v.name.charAt(0)}
-                                                    </div>
-                                                ) : null;
-                                            })}
-                                        </div>
-                                    )}
-                                </button>
-                            );
-                        })}
+                                        {/* Show voters rings (non-anonymous only) - now with unique initials and colors */}
+                                        {showDetailedVotes && votersForThis.length > 0 && (
+                                            <div className="flex -space-x-1 mt-1">
+                                                {votersForThis.map(voterId => {
+                                                    const v = players.find(u => u.id === voterId);
+                                                    return v ? (
+                                                        <div
+                                                            key={voterId}
+                                                            className={`w-7 h-7 rounded-full ${getPlayerColor(voterId, players)} border-2 border-slate-900 flex items-center justify-center text-[9px] font-bold text-white shadow-md`}
+                                                            title={v.name}
+                                                        >
+                                                            {playerInitials[voterId]}
+                                                        </div>
+                                                    ) : null;
+                                                })}
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            });
+                        })()}
                     </div>
 
                     <div className="mt-auto pb-6 space-y-3">

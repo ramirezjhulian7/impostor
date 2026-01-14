@@ -350,7 +350,8 @@ io.on('connection', (socket) => {
             io.to(roomCode).emit('player_eliminated', {
                 eliminatedId: playerId,
                 nextPhase: nextPhase,
-                gameData: room.gameData
+                gameData: room.gameData,
+                players: room.players // Include full player data for game_over reveal
             });
         }
     };
@@ -365,6 +366,7 @@ io.on('connection', (socket) => {
 
     // Reset Game
     socket.on('reset_game', ({ roomCode }) => {
+        const room = rooms[roomCode];
         if (room && room.hostId === socket.id) {
             room.phase = 'lobby';
             room.gameData = {}; // Clear game data

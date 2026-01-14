@@ -472,7 +472,7 @@ export default function MultiplayerGame({ onBack }) {
 
                         <div className="relative h-12 flex items-center justify-center overflow-hidden">
                             {/* Reveal Animation */}
-                            <div className="animate-in slide-in-from-bottom duration-1000 fill-mode-forwards delay-500 flex flex-col items-center">
+                            <div className="opacity-0 animate-reveal flex flex-col items-center">
                                 <div className={`text-xl font-bold inline-block px-4 py-1 rounded-full ${wasImpostor ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-blue-500/20 text-blue-400 border border-blue-500/50'} shadow-[0_0_30px_rgba(255,255,255,0.1)]`}>
                                     {wasImpostor ? 'ERA EL IMPOSTOR' : 'ERA UN CIVIL'}
                                 </div>

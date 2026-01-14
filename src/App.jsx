@@ -55,7 +55,10 @@ function ModeSelector({ onSelectMode }) {
     );
 }
 
+import { useWakeLock } from './hooks/useWakeLock';
+
 export default function App() {
+    useWakeLock();
     const [gameMode, setGameMode] = useState(null); // 'local' | 'online' | null
 
     return (

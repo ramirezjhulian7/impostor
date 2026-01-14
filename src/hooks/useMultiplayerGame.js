@@ -59,6 +59,9 @@ export function useMultiplayerGame() {
             // Can show animation here if needed
             setPhase(data.nextPhase);
             setGameData(data.gameData);
+            if (data.players) {
+                setPlayers(data.players); // Update with full data for game_over
+            }
         });
 
         socket.on('game_reset', (room) => {

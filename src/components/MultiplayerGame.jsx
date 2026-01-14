@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Eye, EyeOff, Skull, Crown, AlertTriangle, Settings, Check, Shield, Shuffle, Play, ArrowRight, UserX, RefreshCw, Key, MessageCircle, Copy, Loader, Wifi, Edit2 } from 'lucide-react';
+import { Users, UserPlus, Eye, EyeOff, Skull, Crown, AlertTriangle, Settings, Check, Shield, Shuffle, Play, ArrowRight, UserX, RefreshCw, Key, MessageCircle, Copy, Loader, Wifi, Edit2, HelpCircle, Ban, Trophy, X } from 'lucide-react';
 import { useMultiplayerGame } from '../hooks/useMultiplayerGame';
 import { useSocket } from '../context/SocketContext';
 import { WORD_DATA } from '../data/words';
@@ -8,10 +8,10 @@ import TimerDisplay from './TimerDisplay';
 export default function MultiplayerGame({ onBack }) {
     const {
         roomCode, isHost, myPlayerId, players,
-        phase, settings, gameData, playedWords,
+        phase, settings, gameData, playedWords, ranking,
         error, setError, isLoading,
         joinRoom, createRoom, updateSettings,
-        startGame, nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer
+        startGame, nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer, voteUnknownWord
     } = useMultiplayerGame();
 
     const { serverUrl, updateServerUrl } = useSocket();
@@ -21,6 +21,8 @@ export default function MultiplayerGame({ onBack }) {
     const [showUrlEdit, setShowUrlEdit] = useState(false);
     const [customUrl, setCustomUrl] = useState(serverUrl);
     const [roleRevealed, setRoleRevealed] = useState(false);
+    const [showRulesBanner, setShowRulesBanner] = useState(false);
+    const [showRankingModal, setShowRankingModal] = useState(false);
 
     const [localTimeLeft, setLocalTimeLeft] = useState(0);
     const [isLocalTimerRunning, setIsLocalTimerRunning] = useState(false);
@@ -46,7 +48,10 @@ export default function MultiplayerGame({ onBack }) {
     }, [isLocalTimerRunning]);
 
     useEffect(() => {
-        if (phase === 'distribution') setRoleRevealed(false);
+        if (phase === 'distribution') {
+            setRoleRevealed(false);
+            setShowRulesBanner(false); // Reset for new round
+        }
         if (phase === 'playing') {
             setLocalTimeLeft(180);
             setIsLocalTimerRunning(true);
@@ -58,6 +63,10 @@ export default function MultiplayerGame({ onBack }) {
     const myPlayer = players.find(p => p.id === myPlayerId);
     const isImpostor = myPlayer?.role === 'impostor';
     const otherImpostors = players.filter(p => p.role === 'impostor' && p.id !== myPlayerId);
+
+    // Calculate total available words
+    const totalWords = Object.values(WORD_DATA).reduce((acc, arr) => acc + arr.length, 0);
+    const remainingWords = totalWords - playedWords.length;
 
     const handleCreate = () => {
         if (!playerName.trim()) return setError('Ingresa tu nombre');
@@ -189,14 +198,76 @@ export default function MultiplayerGame({ onBack }) {
                         </div>
                     </div>
                     <div className="text-center">
-                        <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Palabras Jugadas</p>
+                        <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Jugadas</p>
                         <p className="text-2xl font-bold text-emerald-400">{playedWords.length}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Restantes</p>
+                        <p className="text-2xl font-bold text-amber-400">{remainingWords}</p>
                     </div>
                     <div className="text-right">
                         <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Jugadores</p>
                         <p className="text-2xl font-bold text-white">{players.length}</p>
                     </div>
                 </header>
+
+                {/* Trophy Button */}
+                <div className="flex justify-center mb-4">
+                    <button
+                        onClick={() => setShowRankingModal(true)}
+                        className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-400 px-4 py-2 rounded-xl flex items-center gap-2 transition-colors"
+                    >
+                        <Trophy size={20} /> Ver Ranking
+                    </button>
+                </div>
+
+                {/* Ranking Modal */}
+                {showRankingModal && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl w-full max-w-md max-h-[80vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-black text-amber-400 flex items-center gap-2"><Trophy size={24} /> Ranking</h2>
+                                <button onClick={() => setShowRankingModal(false)} className="text-slate-500 hover:text-white transition-colors">
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            {Object.keys(ranking).length === 0 ? (
+                                <p className="text-slate-500 text-center py-8">No hay victorias registradas aún</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {Object.entries(ranking)
+                                        .sort((a, b) => b[1] - a[1])
+                                        .map(([name, wins], index) => (
+                                            <div
+                                                key={name}
+                                                className={`flex justify-between items-center p-3 rounded-xl border ${index === 0 ? 'bg-amber-500/20 border-amber-500/50' :
+                                                        index === 1 ? 'bg-slate-500/20 border-slate-400/50' :
+                                                            index === 2 ? 'bg-orange-900/20 border-orange-700/50' :
+                                                                'bg-slate-950 border-slate-800'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`text-lg font-black ${index === 0 ? 'text-amber-400' :
+                                                            index === 1 ? 'text-slate-300' :
+                                                                index === 2 ? 'text-orange-500' :
+                                                                    'text-slate-500'
+                                                        }`}>
+                                                        #{index + 1}
+                                                    </span>
+                                                    <span className="text-white font-bold">{name}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1 text-emerald-400 font-bold">
+                                                    <Crown size={16} /> {wins}
+                                                </div>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex-1 space-y-6 overflow-y-auto pb-20">
                     <div className="grid grid-cols-2 gap-3">
@@ -330,6 +401,48 @@ export default function MultiplayerGame({ onBack }) {
     if (phase === 'playing') {
         const aliveCount = players.filter(p => p.alive).length;
         const startingPlayer = players[gameData.startingPlayerIndex];
+        const unknownVotes = gameData?.unknownWordVotes ? Object.keys(gameData.unknownWordVotes).length : 0;
+        const civilianCount = players.filter(p => p.role === 'civilian').length;
+        const hasVotedUnknown = gameData?.unknownWordVotes?.[myPlayerId];
+
+        // Show rules banner first
+        if (!showRulesBanner) {
+            return (
+                <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+                    <div className="max-w-md w-full bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl">
+                        <Ban size={48} className="text-red-500 mx-auto mb-4" />
+                        <h2 className="text-2xl font-black text-white mb-4 uppercase">Reglas del Debate</h2>
+
+                        <div className="space-y-4 text-left mb-6">
+                            <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-xl">
+                                <p className="text-red-400 font-bold text-sm flex items-center gap-2">
+                                    <Ban size={16} /> PROHIBIDO usar el celular
+                                </p>
+                                <p className="text-slate-400 text-xs mt-1">No busques la palabra ni sinónimos</p>
+                            </div>
+
+                            <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl">
+                                <p className="text-amber-400 font-bold text-sm flex items-center gap-2">
+                                    <HelpCircle size={16} /> ¿No conoces la palabra?
+                                </p>
+                                <p className="text-slate-400 text-xs mt-1">
+                                    Si eres civil y no sabes qué es, presiona "No Conozco".
+                                    Si más de la mitad de los civiles no conocen la palabra, la partida termina en empate.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => setShowRulesBanner(true)}
+                            className="w-full bg-slate-100 text-slate-900 font-black py-4 rounded-xl hover:scale-[1.02] transition-transform"
+                        >
+                            ENTENDIDO
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className={`min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center transition-colors duration-500 ${localTimeLeft < 10 && localTimeLeft > 0 ? 'bg-red-950/30 shadow-[inset_0_0_100px_rgba(220,38,38,0.2)]' : ''}`}>
                 <div className="max-w-md w-full space-y-6">
@@ -345,9 +458,34 @@ export default function MultiplayerGame({ onBack }) {
                         )}
                         <TimerDisplay timeLeft={localTimeLeft} isTimerRunning={isLocalTimerRunning} setIsTimerRunning={setIsLocalTimerRunning} />
                         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6 w-full"><p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Categoría</p><p className="text-xl font-bold text-slate-200">{gameData.activeCategory}</p></div>
-                        {isHost ? (
-                            <button onClick={() => nextPhase('voting')} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-900/30 transition-transform hover:scale-[1.02] flex items-center justify-center gap-2"><Skull size={20} /> INICIAR VOTACIÓN</button>
-                        ) : (<p className="text-slate-500 text-sm">Debate en curso...</p>)}
+
+                        {/* Unknown word votes indicator */}
+                        {unknownVotes > 0 && (
+                            <div className="bg-amber-500/10 border border-amber-500/30 px-4 py-2 rounded-xl mb-4 w-full">
+                                <p className="text-amber-400 text-xs font-bold">
+                                    {unknownVotes} de {civilianCount} civiles no conocen la palabra
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="w-full space-y-3">
+                            {isHost ? (
+                                <button onClick={() => nextPhase('voting')} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-900/30 transition-transform hover:scale-[1.02] flex items-center justify-center gap-2"><Skull size={20} /> INICIAR VOTACIÓN</button>
+                            ) : (<p className="text-slate-500 text-sm">Debate en curso...</p>)}
+
+                            {/* No Conozco button - only for civilians who haven't voted */}
+                            {!isImpostor && !hasVotedUnknown && (
+                                <button
+                                    onClick={voteUnknownWord}
+                                    className="w-full bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <HelpCircle size={18} /> NO CONOZCO LA PALABRA
+                                </button>
+                            )}
+                            {hasVotedUnknown && (
+                                <p className="text-amber-400 text-xs">Ya votaste que no conoces la palabra</p>
+                            )}
+                        </div>
                     </div>
                     <div className="text-xs text-slate-600 font-mono">Quedan {aliveCount} jugadores vivos.</div>
                 </div>
@@ -495,13 +633,29 @@ export default function MultiplayerGame({ onBack }) {
 
     if (phase === 'game_over') {
         const impostorsWon = gameData.winnerTeam === 'impostor';
+        const isDraw = gameData.winnerTeam === 'draw';
+
+        const bgColor = isDraw ? 'bg-amber-950' : (impostorsWon ? 'bg-red-950' : 'bg-blue-950');
+
         return (
-            <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors duration-1000 ${impostorsWon ? 'bg-red-950' : 'bg-blue-950'}`}>
+            <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors duration-1000 ${bgColor}`}>
                 <div className="bg-slate-900/50 backdrop-blur-xl p-6 rounded-3xl shadow-2xl border border-white/10 w-full max-w-md my-4 max-h-[95vh] overflow-y-auto scrollbar-hide">
                     <div className="mb-4">
-                        {impostorsWon ? (<Skull size={60} className="text-red-500 mx-auto drop-shadow-lg" />) : (<Crown size={60} className="text-yellow-400 mx-auto drop-shadow-lg" />)}
-                        <h2 className="text-4xl font-black text-white mt-2 uppercase tracking-tighter leading-none">{impostorsWon ? 'Impostores' : 'Civiles'}</h2>
-                        <h3 className="text-lg font-light text-white/80 uppercase tracking-widest">Ganan la partida</h3>
+                        {isDraw ? (
+                            <>
+                                <HelpCircle size={60} className="text-amber-400 mx-auto drop-shadow-lg" />
+                                <h2 className="text-4xl font-black text-white mt-2 uppercase tracking-tighter leading-none">Empate</h2>
+                                <h3 className="text-lg font-light text-white/80 uppercase tracking-widest">
+                                    {gameData.drawReason || 'La partida terminó en empate'}
+                                </h3>
+                            </>
+                        ) : (
+                            <>
+                                {impostorsWon ? (<Skull size={60} className="text-red-500 mx-auto drop-shadow-lg" />) : (<Crown size={60} className="text-yellow-400 mx-auto drop-shadow-lg" />)}
+                                <h2 className="text-4xl font-black text-white mt-2 uppercase tracking-tighter leading-none">{impostorsWon ? 'Impostores' : 'Civiles'}</h2>
+                                <h3 className="text-lg font-light text-white/80 uppercase tracking-widest">Ganan la partida</h3>
+                            </>
+                        )}
                     </div>
                     <div className="bg-black/30 rounded-2xl p-4 mb-6 text-left border border-white/5 space-y-4">
                         <div><p className="text-[10px] text-white/50 uppercase tracking-widest mb-1">Palabra Secreta</p><p className="text-xl text-white font-bold">{gameData.secretWord}</p></div>

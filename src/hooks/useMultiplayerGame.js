@@ -23,6 +23,7 @@ export function useMultiplayerGame() {
     });
     const [gameData, setGameData] = useState({});
     const [playedWords, setPlayedWords] = useState([]);
+    const [ranking, setRanking] = useState({});
 
     useEffect(() => {
         if (!socket) return;
@@ -42,6 +43,7 @@ export function useMultiplayerGame() {
             setPhase(room.phase);
             setGameData(room.gameData);
             if (room.playedWords) setPlayedWords(room.playedWords);
+            if (room.ranking) setRanking(room.ranking);
         });
 
         socket.on('game_started', (data) => {
@@ -62,6 +64,9 @@ export function useMultiplayerGame() {
             if (data.players) {
                 setPlayers(data.players); // Update with full data for game_over
             }
+            if (data.ranking) {
+                setRanking(data.ranking);
+            }
         });
 
         socket.on('game_reset', (room) => {
@@ -76,6 +81,12 @@ export function useMultiplayerGame() {
             setIsLoading(false);
         });
 
+        socket.on('game_draw', (data) => {
+            setPhase('game_over');
+            setGameData(data.gameData);
+            setPlayers(data.players);
+        });
+
         return () => {
             socket.off('room_joined');
             socket.off('update_room');
@@ -84,6 +95,7 @@ export function useMultiplayerGame() {
             socket.off('player_eliminated');
             socket.off('game_reset');
             socket.off('error');
+            socket.off('game_draw');
         };
     }, [socket]);
 
@@ -190,16 +202,22 @@ export function useMultiplayerGame() {
         }
     };
 
+    const voteUnknownWord = () => {
+        if (socket) {
+            socket.emit('vote_unknown_word', { roomCode, playerId: myPlayerId });
+        }
+    };
+
     return {
         // State
         isConnected, isLoading, error, setError,
         roomCode, isHost, myPlayerId, players,
-        phase, settings, gameData, playedWords,
+        phase, settings, gameData, playedWords, ranking,
 
         // Actions
         connect,
         joinRoom, createRoom,
         updateSettings, startGame,
-        nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer
+        nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer, voteUnknownWord
     };
 }

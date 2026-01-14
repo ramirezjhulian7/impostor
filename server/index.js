@@ -93,7 +93,8 @@ io.on('connection', (socket) => {
                 role: null, // 'impostor' or 'civilian'
                 alive: true,
                 votes: 0,
-                connected: true
+                connected: true,
+                wins: 0
             }],
             phase: 'lobby', // lobby, playing, voting, result, game_over
             settings: {
@@ -113,7 +114,8 @@ io.on('connection', (socket) => {
                 winnerTeam: null
             },
             playedWords: [],
-            lastImpostorIds: []
+            lastImpostorIds: [],
+            ranking: {} // { playerId: { name, wins } }
         };
 
         socket.join(roomCode);
@@ -156,7 +158,8 @@ io.on('connection', (socket) => {
                 role: null,
                 alive: true,
                 votes: 0,
-                connected: true
+                connected: true,
+                wins: 0
             };
 
             room.players.push(newPlayer);
@@ -235,7 +238,47 @@ io.on('connection', (socket) => {
         const room = rooms[roomCode];
         if (room && room.hostId === socket.id) {
             room.phase = phase;
+
+            // Initialize unknown word votes when entering playing phase
+            if (phase === 'playing') {
+                room.gameData.unknownWordVotes = {};
+            }
+
             io.to(roomCode).emit('phase_change', phase);
+        }
+    });
+
+    // Vote Unknown Word (civilian doesn't know the word)
+    socket.on('vote_unknown_word', ({ roomCode, playerId }) => {
+        const room = rooms[roomCode];
+        if (room && room.phase === 'playing') {
+            const player = room.players.find(p => p.id === playerId);
+
+            // Only civilians can vote that they don't know
+            if (player && player.role === 'civilian') {
+                if (!room.gameData.unknownWordVotes) room.gameData.unknownWordVotes = {};
+                room.gameData.unknownWordVotes[playerId] = true;
+
+                // Count votes
+                const civilianCount = room.players.filter(p => p.role === 'civilian').length;
+                const unknownVotes = Object.keys(room.gameData.unknownWordVotes).length;
+
+                // If more than half of civilians don't know the word
+                if (unknownVotes > civilianCount / 2) {
+                    room.phase = 'game_over';
+                    room.gameData.winnerTeam = 'draw';
+                    room.gameData.drawReason = 'Más de la mitad de los civiles no conocían la palabra';
+
+                    io.to(roomCode).emit('game_draw', {
+                        reason: room.gameData.drawReason,
+                        players: room.players,
+                        gameData: room.gameData
+                    });
+                } else {
+                    // Broadcast update so others see the vote count
+                    broadcastRoomUpdate(roomCode);
+                }
+            }
         }
     });
 
@@ -335,9 +378,19 @@ io.on('connection', (socket) => {
             if (aliveImpostors === 0) {
                 room.gameData.winnerTeam = 'civilian';
                 nextPhase = 'game_over';
+                // Award wins to all civilians
+                room.players.filter(p => p.role === 'civilian').forEach(p => {
+                    p.wins++;
+                    room.ranking[p.name] = (room.ranking[p.name] || 0) + 1;
+                });
             } else if (aliveImpostors >= aliveCivilians) {
                 room.gameData.winnerTeam = 'impostor';
                 nextPhase = 'game_over';
+                // Award wins to all impostors
+                room.players.filter(p => p.role === 'impostor').forEach(p => {
+                    p.wins++;
+                    room.ranking[p.name] = (room.ranking[p.name] || 0) + 1;
+                });
             }
 
             room.phase = nextPhase;
@@ -351,7 +404,8 @@ io.on('connection', (socket) => {
                 eliminatedId: playerId,
                 nextPhase: nextPhase,
                 gameData: room.gameData,
-                players: room.players // Include full player data for game_over reveal
+                players: room.players, // Include full player data for game_over reveal
+                ranking: room.ranking
             });
         }
     };

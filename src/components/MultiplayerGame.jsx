@@ -334,21 +334,24 @@ export default function MultiplayerGame({ onBack }) {
 
                 <div className="flex-1 space-y-6 overflow-y-auto pb-20">
                     <div className="grid grid-cols-2 gap-3">
-                        {players.map(p => (
-                            <div key={p.id} className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
-                                    {p.name.charAt(0)}
+                        {(() => {
+                            const playerInitials = generateUniqueInitials(players);
+                            return players.map(p => (
+                                <div key={p.id} className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full ${getPlayerColor(p.id, players)} flex items-center justify-center text-xs font-bold text-white shadow-md`}>
+                                        {playerInitials[p.id]}
+                                    </div>
+                                    <span className={`text-sm font-bold truncate ${p.id === myPlayerId ? 'text-purple-400' : 'text-slate-300'}`}>
+                                        {p.name} {p.isHost && '👑'}
+                                    </span>
+                                    {isHost && !p.isHost && (
+                                        <button onClick={() => kickPlayer(p.id)} className="ml-auto text-red-500 hover:bg-red-500/10 p-1 rounded transition-colors" title="Expulsar">
+                                            <UserX size={16} />
+                                        </button>
+                                    )}
                                 </div>
-                                <span className={`text-sm font-bold truncate ${p.id === myPlayerId ? 'text-purple-400' : 'text-slate-300'}`}>
-                                    {p.name} {p.isHost && '👑'}
-                                </span>
-                                {isHost && !p.isHost && (
-                                    <button onClick={() => kickPlayer(p.id)} className="ml-auto text-red-500 hover:bg-red-500/10 p-1 rounded transition-colors" title="Expulsar">
-                                        <UserX size={16} />
-                                    </button>
-                                )}
-                            </div>
-                        ))}
+                            ));
+                        })()}
                     </div>
 
                     {isHost ? (

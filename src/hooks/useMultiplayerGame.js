@@ -7,6 +7,7 @@ export function useMultiplayerGame() {
     // UI State
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isReconnecting, setIsReconnecting] = useState(false);
 
     // Game State (Synced from Server)
     const [roomCode, setRoomCode] = useState(null);
@@ -32,9 +33,21 @@ export function useMultiplayerGame() {
             setRoomCode(data.roomCode);
             setIsHost(data.isHost);
             setMyPlayerId(data.playerId);
-            localStorage.setItem('impostor_room', data.roomCode); // Save for reconnect
+            localStorage.setItem('impostor_room', data.roomCode);
             setIsLoading(false);
+            setIsReconnecting(false);
             setError(null);
+        });
+
+        socket.on('room_state', (room) => {
+            // Full state sync for reconnection
+            setPlayers(room.players);
+            setSettings(room.settings);
+            setPhase(room.phase);
+            setGameData(room.gameData || {});
+            if (room.playedWords) setPlayedWords(room.playedWords);
+            if (room.ranking) setRanking(room.ranking);
+            setIsReconnecting(false);
         });
 
         socket.on('update_room', (room) => {
@@ -58,11 +71,10 @@ export function useMultiplayerGame() {
         });
 
         socket.on('player_eliminated', (data) => {
-            // Can show animation here if needed
             setPhase(data.nextPhase);
             setGameData(data.gameData);
             if (data.players) {
-                setPlayers(data.players); // Update with full data for game_over
+                setPlayers(data.players);
             }
             if (data.ranking) {
                 setRanking(data.ranking);
@@ -73,12 +85,20 @@ export function useMultiplayerGame() {
             setPlayers(room.players);
             setPhase(room.phase);
             setGameData({});
-            // Don't reset playedWords here automatically
         });
 
         socket.on('error', (data) => {
             setError(data.message);
             setIsLoading(false);
+            setIsReconnecting(false);
+        });
+
+        socket.on('rejoin_failed', (data) => {
+            // Clear saved session if rejoin fails
+            localStorage.removeItem('impostor_room');
+            setRoomCode(null);
+            setIsReconnecting(false);
+            setError(data.message);
         });
 
         socket.on('game_draw', (data) => {
@@ -89,33 +109,54 @@ export function useMultiplayerGame() {
 
         return () => {
             socket.off('room_joined');
+            socket.off('room_state');
             socket.off('update_room');
             socket.off('game_started');
             socket.off('phase_change');
             socket.off('player_eliminated');
             socket.off('game_reset');
             socket.off('error');
+            socket.off('rejoin_failed');
             socket.off('game_draw');
         };
     }, [socket]);
 
-    // Auto Reconnect
+    // Auto Reconnect on page load or socket reconnection
     useEffect(() => {
         const savedRoom = localStorage.getItem('impostor_room');
         const savedName = localStorage.getItem('impostor_name');
 
         if (savedRoom && savedName && !roomCode) {
-            // Attempt reconnect logic
-            // We need to wait for socket to be ready
             if (!isConnected) {
                 console.log('Detected saved session, connecting...');
                 connect();
-                // pendingAction will handle the join when connected
-                setPendingAction({ type: 'join', payload: { code: savedRoom, name: savedName } });
-                setIsLoading(true);
+                setPendingAction({ type: 'rejoin', payload: { code: savedRoom, name: savedName } });
+                setIsReconnecting(true);
             }
         }
-    }, [roomCode, isConnected]); // Only run if roomCode is missing
+    }, [roomCode, isConnected]);
+
+    // Handle socket reconnection (when socket.io auto-reconnects)
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleReconnect = () => {
+            const savedRoom = localStorage.getItem('impostor_room');
+            const savedName = localStorage.getItem('impostor_name');
+
+            if (savedRoom && savedName) {
+                console.log('Socket reconnected, attempting to rejoin room...');
+                setIsReconnecting(true);
+                socket.emit('rejoin_room', { roomCode: savedRoom, playerName: savedName });
+            }
+        };
+
+        socket.on('connect', handleReconnect);
+
+        return () => {
+            socket.off('connect', handleReconnect);
+        };
+    }, [socket]);
 
     // Pending Actions (to handle race condition where socket isn't ready yet)
     const [pendingAction, setPendingAction] = useState(null); // { type: 'create' | 'join', payload: any }
@@ -126,6 +167,8 @@ export function useMultiplayerGame() {
                 socket.emit('create_room', { playerName: pendingAction.payload.name });
             } else if (pendingAction.type === 'join') {
                 socket.emit('join_room', { roomCode: pendingAction.payload.code, playerName: pendingAction.payload.name });
+            } else if (pendingAction.type === 'rejoin') {
+                socket.emit('rejoin_room', { roomCode: pendingAction.payload.code, playerName: pendingAction.payload.name });
             }
             setPendingAction(null);
         }
@@ -210,7 +253,7 @@ export function useMultiplayerGame() {
 
     return {
         // State
-        isConnected, isLoading, error, setError,
+        isConnected, isLoading, isReconnecting, error, setError,
         roomCode, isHost, myPlayerId, players,
         phase, settings, gameData, playedWords, ranking,
 

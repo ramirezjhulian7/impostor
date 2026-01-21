@@ -17,6 +17,7 @@ const io = new Server(server, {
 
 // Game State
 const rooms = {};
+const disconnectTimeouts = {}; // { `${roomCode}-${playerName}`: timeoutId }
 
 // Helpers
 const generateRoomCode = () => {
@@ -128,26 +129,42 @@ io.on('connection', (socket) => {
     socket.on('join_room', ({ roomCode, playerName }) => {
         const room = rooms[roomCode];
         if (room) {
-            if (room.phase !== 'lobby') {
-                socket.emit('error', { message: 'El juego ya ha comenzado' });
-                return;
-            }
-
             const existingPlayer = room.players.find(p => p.name === playerName);
+
             if (existingPlayer) {
-                // Reconnection Logic
+                // Reconnection Logic - works in ANY phase now
                 if (!existingPlayer.connected) {
+                    // Clear any pending disconnect timeout
+                    const timeoutKey = `${roomCode}-${playerName}`;
+                    if (disconnectTimeouts[timeoutKey]) {
+                        clearTimeout(disconnectTimeouts[timeoutKey]);
+                        delete disconnectTimeouts[timeoutKey];
+                    }
+
                     existingPlayer.connected = true;
                     existingPlayer.id = socket.id; // Update socket ID
                     socket.join(roomCode);
 
-                    socket.emit('room_joined', { roomCode, isHost: existingPlayer.isHost, playerId: socket.id });
+                    // Send full room state for reconnection
+                    socket.emit('room_joined', {
+                        roomCode,
+                        isHost: existingPlayer.isHost,
+                        playerId: socket.id,
+                        isReconnection: true
+                    });
+                    socket.emit('room_state', sanitizeRoomForPlayer(room, socket.id));
                     broadcastRoomUpdate(roomCode);
-                    console.log(`${playerName} reconnected to room ${roomCode}`);
+                    console.log(`${playerName} reconnected to room ${roomCode} (phase: ${room.phase})`);
                     return;
                 }
 
                 socket.emit('error', { message: 'Nombre ya en uso' });
+                return;
+            }
+
+            // New player can only join during lobby
+            if (room.phase !== 'lobby') {
+                socket.emit('error', { message: 'El juego ya ha comenzado' });
                 return;
             }
 
@@ -170,6 +187,60 @@ io.on('connection', (socket) => {
             console.log(`${playerName} joined room ${roomCode}`);
         } else {
             socket.emit('error', { message: 'Sala no encontrada' });
+        }
+    });
+
+    // Rejoin Room - explicit reconnection request
+    socket.on('rejoin_room', ({ roomCode, playerName }) => {
+        const room = rooms[roomCode];
+        if (!room) {
+            socket.emit('rejoin_failed', { message: 'Sala no encontrada' });
+            localStorage && localStorage.removeItem('impostor_room');
+            return;
+        }
+
+        const existingPlayer = room.players.find(p => p.name === playerName);
+        if (!existingPlayer) {
+            socket.emit('rejoin_failed', { message: 'No estabas en esta sala' });
+            return;
+        }
+
+        // Clear any pending disconnect timeout
+        const timeoutKey = `${roomCode}-${playerName}`;
+        if (disconnectTimeouts[timeoutKey]) {
+            clearTimeout(disconnectTimeouts[timeoutKey]);
+            delete disconnectTimeouts[timeoutKey];
+        }
+
+        existingPlayer.connected = true;
+        existingPlayer.id = socket.id;
+
+        // Update hostId if this was the host
+        if (existingPlayer.isHost) {
+            room.hostId = socket.id;
+        }
+
+        socket.join(roomCode);
+
+        socket.emit('room_joined', {
+            roomCode,
+            isHost: existingPlayer.isHost,
+            playerId: socket.id,
+            isReconnection: true
+        });
+        socket.emit('room_state', sanitizeRoomForPlayer(room, socket.id));
+        broadcastRoomUpdate(roomCode);
+        console.log(`${playerName} rejoined room ${roomCode} (phase: ${room.phase})`);
+    });
+
+    // Request current room state
+    socket.on('request_room_state', ({ roomCode }) => {
+        const room = rooms[roomCode];
+        if (room) {
+            const player = room.players.find(p => p.id === socket.id);
+            if (player) {
+                socket.emit('room_state', sanitizeRoomForPlayer(room, socket.id));
+            }
         }
     });
 
@@ -462,35 +533,43 @@ io.on('connection', (socket) => {
 
             if (player) {
                 player.connected = false;
+                const playerName = player.name;
+                const timeoutKey = `${code}-${playerName}`;
 
-                // If it's lobby, maybe we remove them? For now, let's keep them 'ghosted' 
-                // but if we want to support reconnection we shouldn't delete immediately.
-                // However, infinite ghosts is bad. 
-                // Compromise: Mark as disconnected. If host disconnects, maybe complex handling needed.
-
-                // For MVP Reconnection: Just mark disconnected and update room
+                // Broadcast disconnect status immediately
                 broadcastRoomUpdate(code);
 
-                // Cleanup logic could be here (e.g. set timeout to delete player if not back in 5 mins)
-                // But for now we leave them in the list so they can rejoin.
+                // Set timeout to remove player if they don't reconnect
+                const DISCONNECT_TIMEOUT = 180000; // 180 seconds (3 minutes)
 
-                // Wait... if they are in lobby and disconnect, maybe we should remove them to free up the name/slot?
-                // If game in progress -> Keep them. If Lobby -> Remove them?
-                if (room.phase === 'lobby') {
-                    // Remove from lobby to keep it clean, unless we want persistence there too.
-                    // Let's remove in lobby for cleaner experience, Reconnect is mostly for "Oops I refreshed mid-game"
-                    const index = room.players.indexOf(player);
-                    room.players.splice(index, 1);
-                    if (room.players.length === 0) {
-                        delete rooms[code];
-                    } else {
-                        if (player.isHost) {
-                            room.players[0].isHost = true;
-                            room.hostId = room.players[0].id;
+                disconnectTimeouts[timeoutKey] = setTimeout(() => {
+                    const currentRoom = rooms[code];
+                    if (!currentRoom) return;
+
+                    const disconnectedPlayer = currentRoom.players.find(p => p.name === playerName);
+                    if (disconnectedPlayer && !disconnectedPlayer.connected) {
+                        console.log(`Removing ${playerName} from ${code} due to timeout`);
+
+                        const index = currentRoom.players.indexOf(disconnectedPlayer);
+                        currentRoom.players.splice(index, 1);
+
+                        if (currentRoom.players.length === 0) {
+                            delete rooms[code];
+                        } else {
+                            // Transfer host if needed
+                            if (disconnectedPlayer.isHost) {
+                                const newHost = currentRoom.players.find(p => p.connected);
+                                if (newHost) {
+                                    newHost.isHost = true;
+                                    currentRoom.hostId = newHost.id;
+                                }
+                            }
+                            broadcastRoomUpdate(code);
                         }
-                        broadcastRoomUpdate(code);
                     }
-                }
+                    delete disconnectTimeouts[timeoutKey];
+                }, DISCONNECT_TIMEOUT);
+
                 break;
             }
         }

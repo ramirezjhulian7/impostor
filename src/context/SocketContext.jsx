@@ -21,7 +21,12 @@ export const SocketProvider = ({ children }) => {
 
         const newSocket = io(serverUrl, {
             transports: ['websocket'],
-            upgrade: false
+            upgrade: false,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
         });
 
         newSocket.on('connect', () => {

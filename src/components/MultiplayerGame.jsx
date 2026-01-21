@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Eye, EyeOff, Skull, Crown, AlertTriangle, Settings, Check, Shield, Shuffle, Play, ArrowRight, UserX, RefreshCw, Key, MessageCircle, Copy, Loader, Wifi, Edit2, HelpCircle, Ban, Trophy, X } from 'lucide-react';
+import { Users, UserPlus, Eye, EyeOff, Skull, Crown, AlertTriangle, Settings, Check, Shield, Shuffle, Play, ArrowRight, UserX, RefreshCw, Key, MessageCircle, Copy, Loader, Wifi, WifiOff, Edit2, HelpCircle, Ban, Trophy, X } from 'lucide-react';
 import { useMultiplayerGame } from '../hooks/useMultiplayerGame';
 import { useSocket } from '../context/SocketContext';
 import { WORD_DATA } from '../data/words';
@@ -72,7 +72,7 @@ export default function MultiplayerGame({ onBack }) {
     const {
         roomCode, isHost, myPlayerId, players,
         phase, settings, gameData, playedWords, ranking,
-        error, setError, isLoading,
+        error, setError, isLoading, isReconnecting,
         joinRoom, createRoom, updateSettings,
         startGame, nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer, voteUnknownWord
     } = useMultiplayerGame();
@@ -182,6 +182,20 @@ export default function MultiplayerGame({ onBack }) {
             timer: 180
         });
     };
+
+    // Reconnecting overlay
+    if (isReconnecting) {
+        return (
+            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6">
+                <div className="bg-slate-900/60 p-8 rounded-3xl border border-slate-800 shadow-xl backdrop-blur-sm text-center">
+                    <WifiOff className="mx-auto text-amber-500 mb-4 animate-pulse" size={48} />
+                    <h2 className="text-xl font-bold text-white mb-2">Reconectando...</h2>
+                    <p className="text-slate-400 text-sm">Intentando recuperar tu sesión</p>
+                    <Loader className="animate-spin mx-auto text-purple-500 mt-6" size={32} />
+                </div>
+            </div>
+        );
+    }
 
     if (!roomCode) {
         return (
@@ -337,11 +351,16 @@ export default function MultiplayerGame({ onBack }) {
                         {(() => {
                             const playerInitials = generateUniqueInitials(players);
                             return players.map(p => (
-                                <div key={p.id} className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full ${getPlayerColor(p.id, players)} flex items-center justify-center text-xs font-bold text-white shadow-md`}>
+                                <div key={p.id} className={`bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center gap-3 ${!p.connected ? 'opacity-50' : ''}`}>
+                                    <div className={`w-8 h-8 rounded-full ${getPlayerColor(p.id, players)} flex items-center justify-center text-xs font-bold text-white shadow-md relative`}>
                                         {playerInitials[p.id]}
+                                        {!p.connected && (
+                                            <div className="absolute -bottom-1 -right-1 bg-amber-500 rounded-full p-0.5">
+                                                <WifiOff size={10} className="text-white" />
+                                            </div>
+                                        )}
                                     </div>
-                                    <span className={`text-sm font-bold truncate ${p.id === myPlayerId ? 'text-purple-400' : 'text-slate-300'}`}>
+                                    <span className={`text-sm font-bold truncate flex-1 ${p.id === myPlayerId ? 'text-purple-400' : 'text-slate-300'}`}>
                                         {p.name} {p.isHost && '👑'}
                                     </span>
                                     {isHost && !p.isHost && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
 
 export function useMultiplayerGame() {
@@ -121,22 +121,27 @@ export function useMultiplayerGame() {
         };
     }, [socket]);
 
-    // Auto Reconnect on page load or socket reconnection
+    // Auto Reconnect ONLY on initial page load (runs once)
+    const hasAttemptedReconnect = useRef(false);
+
     useEffect(() => {
+        // Only run once on mount
+        if (hasAttemptedReconnect.current) return;
+
         const savedRoom = localStorage.getItem('impostor_room');
         const savedName = localStorage.getItem('impostor_name');
 
-        if (savedRoom && savedName && !roomCode) {
-            if (!isConnected) {
-                console.log('Detected saved session, connecting...');
-                connect();
-                setPendingAction({ type: 'rejoin', payload: { code: savedRoom, name: savedName } });
-                setIsReconnecting(true);
-            }
+        if (savedRoom && savedName && !roomCode && !isConnected) {
+            hasAttemptedReconnect.current = true;
+            console.log('Detected saved session on page load, attempting reconnect...');
+            connect();
+            setPendingAction({ type: 'rejoin', payload: { code: savedRoom, name: savedName } });
+            setIsReconnecting(true);
         }
-    }, [roomCode, isConnected]);
+    }, []);
 
-    // Handle socket reconnection (when socket.io auto-reconnects)
+    // Handle socket reconnection (when socket.io auto-reconnects after disconnect)
+    // This only fires on REAL reconnections, not initial connection
     useEffect(() => {
         if (!socket) return;
 
@@ -144,19 +149,23 @@ export function useMultiplayerGame() {
             const savedRoom = localStorage.getItem('impostor_room');
             const savedName = localStorage.getItem('impostor_name');
 
-            if (savedRoom && savedName) {
+            // Only auto-rejoin if we have saved session AND we already had a roomCode
+            // (meaning we were in a game before disconnecting)
+            if (savedRoom && savedName && roomCode) {
                 console.log('Socket reconnected, attempting to rejoin room...');
                 setIsReconnecting(true);
                 socket.emit('rejoin_room', { roomCode: savedRoom, playerName: savedName });
             }
         };
 
-        socket.on('connect', handleReconnect);
+        // 'reconnect' event only fires when socket.io reconnects after a disconnect
+        // It does NOT fire on initial connection
+        socket.io.on('reconnect', handleReconnect);
 
         return () => {
-            socket.off('connect', handleReconnect);
+            socket.io.off('reconnect', handleReconnect);
         };
-    }, [socket]);
+    }, [socket, roomCode]);
 
     // Pending Actions (to handle race condition where socket isn't ready yet)
     const [pendingAction, setPendingAction] = useState(null); // { type: 'create' | 'join', payload: any }

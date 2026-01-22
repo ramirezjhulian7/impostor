@@ -73,8 +73,10 @@ export default function MultiplayerGame({ onBack }) {
         roomCode, isHost, myPlayerId, players,
         phase, settings, gameData, playedWords, ranking,
         error, setError, isLoading, isReconnecting,
+        hasSavedSession, savedSessionRoom,
         joinRoom, createRoom, updateSettings,
-        startGame, nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer, voteUnknownWord
+        startGame, nextPhase, votePlayer, endVoting, eliminatePlayer, resetGame, kickPlayer, voteUnknownWord,
+        attemptReconnect, clearSavedSession
     } = useMultiplayerGame();
 
     const { serverUrl, updateServerUrl } = useSocket();
@@ -182,6 +184,36 @@ export default function MultiplayerGame({ onBack }) {
             timer: 180
         });
     };
+
+    // Saved session prompt - ask user if they want to reconnect or start new
+    if (hasSavedSession && !roomCode) {
+        return (
+            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6">
+                <div className="bg-slate-900/60 p-8 rounded-3xl border border-slate-800 shadow-xl backdrop-blur-sm text-center max-w-md w-full">
+                    <RefreshCw className="mx-auto text-purple-500 mb-4" size={48} />
+                    <h2 className="text-xl font-bold text-white mb-2">Sesión Anterior Detectada</h2>
+                    <p className="text-slate-400 text-sm mb-6">
+                        Tienes una partida guardada en la sala <span className="text-purple-400 font-mono font-bold">{savedSessionRoom}</span>
+                    </p>
+
+                    <div className="space-y-3">
+                        <button
+                            onClick={attemptReconnect}
+                            className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-purple-900/40 hover:scale-[1.02] transition-all flex justify-center items-center gap-2"
+                        >
+                            <Wifi size={20} /> RECONECTAR
+                        </button>
+                        <button
+                            onClick={clearSavedSession}
+                            className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-4 rounded-xl transition-all flex justify-center items-center gap-2"
+                        >
+                            <Users size={20} /> JUEGO NUEVO
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     // Reconnecting overlay
     if (isReconnecting) {
